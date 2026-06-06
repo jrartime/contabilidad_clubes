@@ -5,8 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { buildFilterHref } from "@/lib/filters";
-import { formatDateEs, formatDecimal } from "@/lib/format";
-import { asignarProgramaMasivoAction } from "./actions";
+import {
+  formatDateEs,
+  formatDecimal,
+  toDateInputValue,
+  toDecimalInputValue,
+} from "@/lib/format";
+import { parseDecimalToNumber } from "@/lib/decimal";
+import { asignarProgramaMasivoAction, updateBancoAction } from "./actions";
 
 type Row = {
   id_banco: number;
@@ -61,6 +67,9 @@ export default function BancosTable({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  // Estado de edición tipo Excel
+  const [editMode, setEditMode] = useState(false);
+
   // Estado de asignación masiva
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -86,6 +95,24 @@ export default function BancosTable({
   function sortHref(col: BancosSortKey) {
     const nextDir = sortKey === col && sortDir === "desc" ? "asc" : "desc";
     return buildFilterHref("/bancos", { ...filterParams, sort: col, dir: nextDir }, []);
+  }
+
+  const fieldStyle: React.CSSProperties = {
+    height: 28,
+    padding: "0 6px",
+    fontSize: 12,
+    boxSizing: "border-box",
+    width: "100%",
+  };
+
+  const disabled = !canEdit || isPending;
+
+  function save(id_banco: number, patch: Omit<Parameters<typeof updateBancoAction>[0], "id_banco">) {
+    startTransition(() => {
+      updateBancoAction({ id_banco, ...patch })
+        .then(() => router.refresh())
+        .catch((e: unknown) => alert(e instanceof Error ? e.message : String(e)));
+    });
   }
 
   const thBase: React.CSSProperties = { borderBottom: "1px solid #ddd", padding: 8, whiteSpace: "nowrap" };
@@ -176,27 +203,29 @@ export default function BancosTable({
 
   return (
     <div>
-      {/* Barra de asignación masiva */}
+      {/* Barra de herramientas */}
       {canEdit && (
-        <div style={{ marginBottom: 12 }}>
-          {!bulkMode ? (
-            <button
-              type="button"
-              onClick={() => { setBulkMode(true); setBulkResult(null); }}
-              className="app-action-link"
-              style={{ gap: 8 }}
-            >
-              <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="5" width="4" height="4" rx="1" />
-                <rect x="3" y="11" width="4" height="4" rx="1" />
-                <rect x="3" y="17" width="4" height="4" rx="1" />
-                <line x1="10" y1="7" x2="21" y2="7" />
-                <line x1="10" y1="13" x2="21" y2="13" />
-                <line x1="10" y1="19" x2="21" y2="19" />
-              </svg>
-              Asignación masiva de programa
-            </button>
-          ) : (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+          {/* Botón modo edición */}
+          <button
+            type="button"
+            onClick={() => { setEditMode((v) => !v); if (bulkMode) setBulkMode(false); }}
+            className={editMode ? "app-action-link" : "app-action-link app-action-link-secondary"}
+            style={{ gap: 8 }}
+          >
+            <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+            {editMode ? "Salir del modo edición" : "Modo edición (Excel)"}
+          </button>
+
+          {isPending && <span style={{ fontSize: 12, opacity: 0.7 }}>Guardando…</span>}
+
+          {/* Botón asignación masiva / panel bulk */}
+          {!editMode && (bulkMode ? (
             <div style={{
               display: "flex",
               alignItems: "center",
@@ -281,7 +310,24 @@ export default function BancosTable({
                 </span>
               )}
             </div>
-          )}
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setBulkMode(true); setBulkResult(null); }}
+              className="app-action-link app-action-link-secondary"
+              style={{ gap: 8 }}
+            >
+              <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="5" width="4" height="4" rx="1" />
+                <rect x="3" y="11" width="4" height="4" rx="1" />
+                <rect x="3" y="17" width="4" height="4" rx="1" />
+                <line x1="10" y1="7" x2="21" y2="7" />
+                <line x1="10" y1="13" x2="21" y2="13" />
+                <line x1="10" y1="19" x2="21" y2="19" />
+              </svg>
+              Asignación masiva de programa
+            </button>
+          ))}
         </div>
       )}
 
@@ -294,7 +340,7 @@ export default function BancosTable({
               {bulkMode && (
                 <th style={{ ...thBase, width: 40, textAlign: "center" }} />
               )}
-              <th style={{ ...thBase, textAlign: "left", width: 90 }}>Acciones</th>
+              {!editMode && <th style={{ ...thBase, textAlign: "left", width: 90 }}>Acciones</th>}
               {sortTh("fecha_operativa", "Fecha", { width: 120 })}
               {sortTh("detalle", "Detalle", { minWidth: 260 })}
               <th style={{ ...thBase, textAlign: "left", width: 160 }}>Referencia</th>
@@ -329,58 +375,211 @@ export default function BancosTable({
                     </td>
                   )}
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee" }}
-                    onClick={bulkMode ? (e) => e.stopPropagation() : undefined}
-                  >
-                    {canEdit ? (
-                      <Link
-                        href={`${buildFilterHref("/bancos", { ...filterParams, edit: row.id_banco }, [])}#form`}
-                        className="app-action-link"
-                        style={{ gap: 6 }}
-                        aria-label="Editar movimiento"
-                      >
-                        <Icon name="edit" />
-                        Editar
-                      </Link>
+                  {/* Acción editar (solo modo lectura) */}
+                  {!editMode && (
+                    <td style={{ padding: 8, borderBottom: "1px solid #eee" }}
+                      onClick={bulkMode ? (e) => e.stopPropagation() : undefined}
+                    >
+                      {canEdit ? (
+                        <Link
+                          href={`${buildFilterHref("/bancos", { ...filterParams, edit: row.id_banco }, [])}#form`}
+                          className="app-action-link"
+                          style={{ gap: 6 }}
+                          aria-label="Editar movimiento"
+                        >
+                          <Icon name="edit" />
+                          Editar
+                        </Link>
+                      ) : (
+                        <span style={{ opacity: 0.6 }}>-</span>
+                      )}
+                    </td>
+                  )}
+
+                  {/* Fecha operativa */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee" }}>
+                    {editMode ? (
+                      <input
+                        type="date"
+                        defaultValue={toDateInputValue(row.fecha_operativa)}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const fecha_operativa = e.currentTarget.value || null;
+                          if (fecha_operativa === (row.fecha_operativa ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, fecha_operativa } : x));
+                          save(row.id_banco, { fecha_operativa });
+                        }}
+                      />
+                    ) : formatDateEs(row.fecha_operativa)}
+                  </td>
+
+                  {/* Detalle */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee" }}>
+                    {editMode ? (
+                      <input
+                        type="text"
+                        defaultValue={row.detalle ?? ""}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const detalle = e.currentTarget.value.trim() || null;
+                          if (detalle === (row.detalle ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, detalle } : x));
+                          save(row.id_banco, { detalle });
+                        }}
+                      />
                     ) : (
-                      <span style={{ opacity: 0.6 }}>-</span>
+                      <>
+                        <div style={{ fontWeight: 700 }}>{row.detalle ?? "-"}</div>
+                        <div style={{ opacity: 0.65, fontSize: 12 }}>
+                          id: {row.id_banco}
+                          {row.orden !== null && row.orden !== undefined ? ` - orden: ${row.orden}` : ""}
+                          {row.referencia_1 ? ` - ref. 1: ${row.referencia_1}` : ""}
+                          {row.referencia_2 ? ` - ref. 2: ${row.referencia_2}` : ""}
+                        </div>
+                      </>
                     )}
                   </td>
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                    {formatDateEs(row.fecha_operativa)}
+                  {/* Referencia */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee" }}>
+                    {editMode ? (
+                      <input
+                        type="text"
+                        defaultValue={row.referencia ?? ""}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const referencia = e.currentTarget.value.trim() || null;
+                          if (referencia === (row.referencia ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, referencia } : x));
+                          save(row.id_banco, { referencia });
+                        }}
+                      />
+                    ) : (row.referencia ?? "-")}
                   </td>
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                    <div style={{ fontWeight: 700 }}>{row.detalle ?? "-"}</div>
-                    <div style={{ opacity: 0.65, fontSize: 12 }}>
-                      id: {row.id_banco}
-                      {row.orden !== null && row.orden !== undefined ? ` - orden: ${row.orden}` : ""}
-                      {row.referencia_1 ? ` - ref. 1: ${row.referencia_1}` : ""}
-                      {row.referencia_2 ? ` - ref. 2: ${row.referencia_2}` : ""}
-                    </div>
+                  {/* Programa */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee" }}>
+                    {editMode ? (
+                      <select
+                        defaultValue={row.programa_id ?? ""}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onChange={(e) => {
+                          if (disabled) return;
+                          const v = e.currentTarget.value;
+                          const programa_id = v ? Number(v) : null;
+                          if (programa_id === (row.programa_id ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, programa_id } : x));
+                          save(row.id_banco, { programa_id });
+                        }}
+                      >
+                        <option value="">(sin programa)</option>
+                        {programas.map((p) => (
+                          <option key={p.id_programa} value={p.id_programa}>
+                            {p.anio ? `[${p.anio}] ` : ""}{p.programa}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (row.programa_id ? programaById.get(Number(row.programa_id)) ?? row.programa_id : "-")}
                   </td>
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                    {row.referencia ?? "-"}
+                  {/* Concepto */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee" }}>
+                    {editMode ? (
+                      <select
+                        defaultValue={row.concepto_id ?? ""}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onChange={(e) => {
+                          if (disabled) return;
+                          const v = e.currentTarget.value;
+                          const concepto_id = v ? Number(v) : null;
+                          if (concepto_id === (row.concepto_id ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, concepto_id } : x));
+                          save(row.id_banco, { concepto_id });
+                        }}
+                      >
+                        <option value="">(sin concepto)</option>
+                        {conceptos.map((c) => (
+                          <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>
+                        ))}
+                      </select>
+                    ) : (row.concepto_id ? conceptoById.get(Number(row.concepto_id)) ?? row.concepto_id : "-")}
                   </td>
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                    {row.programa_id ? programaById.get(Number(row.programa_id)) ?? row.programa_id : "-"}
+                  {/* Debe */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee", textAlign: editMode ? "left" : "right" }}>
+                    {editMode ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={toDecimalInputValue(row.debe)}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const raw = e.currentTarget.value.trim();
+                          if (!raw) { e.currentTarget.value = toDecimalInputValue(row.debe); return; }
+                          const next = parseDecimalToNumber(raw);
+                          if (next === null) { alert("Importe debe inválido"); e.currentTarget.value = toDecimalInputValue(row.debe); return; }
+                          if (next === (row.debe ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, debe: next } : x));
+                          save(row.id_banco, { debe: raw });
+                        }}
+                      />
+                    ) : money(row.debe)}
                   </td>
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                    {row.concepto_id ? conceptoById.get(Number(row.concepto_id)) ?? row.concepto_id : "-"}
+                  {/* Haber */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee", textAlign: editMode ? "left" : "right" }}>
+                    {editMode ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={toDecimalInputValue(row.haber)}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const raw = e.currentTarget.value.trim();
+                          if (!raw) { e.currentTarget.value = toDecimalInputValue(row.haber); return; }
+                          const next = parseDecimalToNumber(raw);
+                          if (next === null) { alert("Importe haber inválido"); e.currentTarget.value = toDecimalInputValue(row.haber); return; }
+                          if (next === (row.haber ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, haber: next } : x));
+                          save(row.id_banco, { haber: raw });
+                        }}
+                      />
+                    ) : money(row.haber)}
                   </td>
 
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "right" }}>
-                    {money(row.debe)}
-                  </td>
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "right" }}>
-                    {money(row.haber)}
-                  </td>
-                  <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "right" }}>
-                    {money(row.importe)}
+                  {/* Importe */}
+                  <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee", textAlign: editMode ? "left" : "right" }}>
+                    {editMode ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={toDecimalInputValue(row.importe)}
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const raw = e.currentTarget.value.trim();
+                          if (!raw) { e.currentTarget.value = toDecimalInputValue(row.importe); return; }
+                          const next = parseDecimalToNumber(raw);
+                          if (next === null) { alert("Importe inválido"); e.currentTarget.value = toDecimalInputValue(row.importe); return; }
+                          if (next === (row.importe ?? null)) return;
+                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, importe: next } : x));
+                          save(row.id_banco, { importe: raw });
+                        }}
+                      />
+                    ) : money(row.importe)}
                   </td>
                 </tr>
               );
@@ -388,7 +587,7 @@ export default function BancosTable({
 
             {rows.length === 0 && (
               <tr>
-                <td colSpan={bulkMode ? 10 : 9} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={editMode ? 8 : bulkMode ? 10 : 9} style={{ padding: 12, opacity: 0.8 }}>
                   No hay movimientos todavia.
                 </td>
               </tr>

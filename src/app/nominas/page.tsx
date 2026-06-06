@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
 import NominaForm from "./NominaForm";
+import NominasTable from "./NominasTable";
 import { normalizeDecimalString, parseDecimalToNumber } from "@/lib/decimal";
 import { formatDateEs, formatDecimal } from "@/lib/format";
 import {
@@ -999,110 +1000,18 @@ export default async function NominasPage({
         } ({rowsAny.length})
       </h2>
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr>
-              {sortHeader("fecha", "Fecha")}
-              {sortHeader("personal", "Personal")}
-              {sortHeader("proveedor", "Proveedor")}
-              {sortHeader("programa", "Programa")}
-              {sortHeader("categoria", "Categoria")}
-              {sortHeader("concepto", "Concepto")}
-              {sortHeader("bruto", "Bruto")}
-              {sortHeader("ss", "SS")}
-              {sortHeader("importe_total", "Total")}
-              {sortHeader("importe_imputado", "Imputado")}
-              {sortHeader("fecha_pago", "Pago")}
-              <th
-                style={{
-                  textAlign: "left",
-                  borderBottom: "1px solid #ddd",
-                  padding: 8,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Acciones
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {sortedRowsAny.map((r: any) => (
-              <tr key={r.id_contabilidad}>
-                <td style={{ padding: 8, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>
-                  {formatDateEs(r.fecha)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {personalMap.get(Number(r.personal_id)) ??
-                    (r.personal_id ? `id ${r.personal_id}` : "-")}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {r.proveedor?.proveedor ?? (r.proveedor_id ? `id ${r.proveedor_id}` : "-")}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {r.programa_ref?.programa ?? (r.programa_id ? `id ${r.programa_id}` : "-")}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {r.categoria_ref?.categoria ?? "-"}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {r.concepto_ref?.concepto ?? (r.concepto_id ? `id ${r.concepto_id}` : "-")}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {formatDecimal(r.bruto ?? 0)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {formatDecimal(r.ss ?? 0)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {formatDecimal(r.importe_total ?? 0)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {formatDecimal(r.importe_imputado ?? 0)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>
-                  {formatDateEs(r.fecha_pago)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {canUserEdit ? (
-                    <div className="row-actions">
-                      <Link
-                        href={`/nominas?edit=${r.id_contabilidad}#form`}
-                        className="icon-button tooltip-button"
-                        aria-label="Editar nomina"
-                      >
-                        <Icon name="edit" />
-                      </Link>
-                    </div>
-                  ) : (
-                    <span style={{ opacity: 0.6 }}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-
-            {rowsAny.length === 0 && !error && (
-              <tr>
-                <td colSpan={12} style={{ padding: 12, opacity: 0.8 }}>
-                  No hay nóminas todavía.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <NominasTable
+        rows={sortedRowsAny}
+        canEdit={canUserEdit}
+        personal={personal ?? []}
+        proveedores={proveedores ?? []}
+        programas={programas ?? []}
+        conceptos={conceptos ?? []}
+        categorias={categorias ?? []}
+        filterParams={nominaFilterParams}
+        sortKey={sortKey}
+        sortDir={sortDirection}
+      />
     </div>
   );
 }
