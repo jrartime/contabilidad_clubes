@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useEffect } from "react";
+import React, { useState, useTransition, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
@@ -71,6 +71,67 @@ export default function NominasTable({
   const [rows, setRows] = useState<NominaRow[]>(initialRows);
 
   useEffect(() => { setRows(initialRows); }, [initialRows]);
+
+  // Panel flotante de edición
+  const [panelRow, setPanelRow] = useState<NominaRow | null>(null);
+  const [panelForm, setPanelForm] = useState<Record<string, string>>({});
+  const [panelSaving, setPanelSaving] = useState(false);
+
+  const openEditPanel = useCallback((r: NominaRow) => {
+    setPanelRow(r);
+    setPanelForm({
+      fecha: r.fecha ?? "",
+      fecha_pago: r.fecha_pago ?? "",
+      personal_id: r.personal_id != null ? String(r.personal_id) : "",
+      proveedor_id: r.proveedor_id != null ? String(r.proveedor_id) : "",
+      programa_id: r.programa_id != null ? String(r.programa_id) : "",
+      concepto_id: r.concepto_id != null ? String(r.concepto_id) : "",
+      categoria_id: r.categoria_id != null ? String(r.categoria_id) : "",
+      bruto: toDecimalInputValue(r.bruto),
+      ss: toDecimalInputValue(r.ss),
+      importe_total: toDecimalInputValue(r.importe_total),
+      importe_imputado: toDecimalInputValue(r.importe_imputado),
+    });
+  }, []);
+
+  const closeEditPanel = useCallback(() => {
+    setPanelRow(null);
+    setPanelForm({});
+  }, []);
+
+  const savePanelForm = useCallback(() => {
+    if (!panelRow) return;
+    const toNum = (v: string) => {
+      const s = v.trim();
+      return s ? parseDecimalToNumber(s) : null;
+    };
+    setPanelSaving(true);
+    updateNominaAction({
+      id_contabilidad: panelRow.id_contabilidad,
+      fecha: panelForm.fecha || null,
+      fecha_pago: panelForm.fecha_pago || null,
+      personal_id: panelForm.personal_id ? Number(panelForm.personal_id) : null,
+      proveedor_id: panelForm.proveedor_id ? Number(panelForm.proveedor_id) : null,
+      programa_id: panelForm.programa_id ? Number(panelForm.programa_id) : null,
+      concepto_id: panelForm.concepto_id ? Number(panelForm.concepto_id) : null,
+      categoria_id: panelForm.categoria_id ? Number(panelForm.categoria_id) : null,
+      bruto: toNum(panelForm.bruto),
+      ss: toNum(panelForm.ss),
+      importe_total: toNum(panelForm.importe_total),
+      importe_imputado: toNum(panelForm.importe_imputado),
+    })
+      .then(() => { router.refresh(); closeEditPanel(); })
+      .catch((e: unknown) => alert(e instanceof Error ? e.message : String(e)))
+      .finally(() => setPanelSaving(false));
+  }, [panelRow, panelForm, router, closeEditPanel]);
+
+  // Cerrar panel con Escape
+  useEffect(() => {
+    if (!panelRow) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") closeEditPanel(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [panelRow, closeEditPanel]);
 
   const disabled = !canEdit || isPending;
 
@@ -396,13 +457,14 @@ export default function NominasTable({
                     <td style={td}>
                       {canEdit ? (
                         <div className="row-actions">
-                          <Link
-                            href={`/nominas?edit=${r.id_contabilidad}#form`}
+                          <button
+                            type="button"
+                            onClick={() => openEditPanel(r)}
                             className="icon-button tooltip-button"
-                            aria-label="Editar nomina"
+                            aria-label="Editar nómina"
                           >
                             <Icon name="edit" />
-                          </Link>
+                          </button>
                         </div>
                       ) : (
                         <span style={{ opacity: 0.6 }}>—</span>
@@ -423,6 +485,202 @@ export default function NominasTable({
           </tbody>
         </table>
       </div>
+
+      {/* Panel flotante de edición */}
+      {panelRow && (
+        <>
+          <div
+            className="drawer-backdrop"
+            onClick={closeEditPanel}
+            style={{ cursor: "pointer" }}
+          />
+          <div className="side-drawer">
+            <div className="side-drawer-header">
+              <div className="side-drawer-title">
+                <span>Nóminas</span>
+                <h2>Editar nómina #{panelRow.id_contabilidad}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditPanel}
+                className="icon-button icon-button-secondary tooltip-button"
+                aria-label="Cerrar"
+                disabled={panelSaving}
+              >
+                <Icon name="logout" />
+              </button>
+            </div>
+
+            <div className="side-drawer-body" style={{ display: "grid", gap: 12 }}>
+              {/* Fechas */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Fecha
+                  <input
+                    type="date"
+                    value={panelForm.fecha}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, fecha: e.target.value }))}
+                    disabled={panelSaving}
+                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Fecha pago
+                  <input
+                    type="date"
+                    value={panelForm.fecha_pago}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, fecha_pago: e.target.value }))}
+                    disabled={panelSaving}
+                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                  />
+                </label>
+              </div>
+
+              {/* Personal */}
+              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                Personal
+                <select
+                  value={panelForm.personal_id}
+                  onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))}
+                  disabled={panelSaving}
+                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                >
+                  <option value="">(sin personal)</option>
+                  {personalOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+
+              {/* Proveedor */}
+              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                Proveedor
+                <select
+                  value={panelForm.proveedor_id}
+                  onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))}
+                  disabled={panelSaving}
+                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                >
+                  <option value="">(sin proveedor)</option>
+                  {proveedorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+
+              {/* Programa */}
+              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                Programa
+                <select
+                  value={panelForm.programa_id}
+                  onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))}
+                  disabled={panelSaving}
+                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                >
+                  <option value="">(sin programa)</option>
+                  {programaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+
+              {/* Categoria */}
+              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                Categoría
+                <select
+                  value={panelForm.categoria_id}
+                  onChange={(e) => setPanelForm((f) => ({ ...f, categoria_id: e.target.value }))}
+                  disabled={panelSaving}
+                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                >
+                  <option value="">(sin categoría)</option>
+                  {categoriaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+
+              {/* Concepto */}
+              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                Concepto
+                <select
+                  value={panelForm.concepto_id}
+                  onChange={(e) => setPanelForm((f) => ({ ...f, concepto_id: e.target.value }))}
+                  disabled={panelSaving}
+                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                >
+                  <option value="">(sin concepto)</option>
+                  {conceptoOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+
+              {/* Importes */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Bruto
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={panelForm.bruto}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, bruto: e.target.value }))}
+                    disabled={panelSaving}
+                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  SS
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={panelForm.ss}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, ss: e.target.value }))}
+                    disabled={panelSaving}
+                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Importe total
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={panelForm.importe_total}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, importe_total: e.target.value }))}
+                    disabled={panelSaving}
+                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Importe imputado
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={panelForm.importe_imputado}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, importe_imputado: e.target.value }))}
+                    disabled={panelSaving}
+                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="drawer-actions">
+              <button
+                type="button"
+                onClick={savePanelForm}
+                disabled={panelSaving}
+                className="icon-button tooltip-button"
+                aria-label={panelSaving ? "Guardando…" : "Guardar cambios"}
+              >
+                <Icon name="save" />
+              </button>
+              <button
+                type="button"
+                onClick={closeEditPanel}
+                disabled={panelSaving}
+                className="icon-button icon-button-secondary tooltip-button"
+                aria-label="Cancelar"
+              >
+                <Icon name="logout" />
+              </button>
+              {panelSaving && (
+                <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>Guardando…</span>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
