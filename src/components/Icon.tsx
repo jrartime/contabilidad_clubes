@@ -1,4 +1,4 @@
-export type IconName = "delete" | "duplicate" | "edit" | "new" | "save" | "settings" | "upload";
+export type IconName = "delete" | "duplicate" | "edit" | "enter" | "logout" | "new" | "save" | "settings" | "upload";
 
 export function Icon({ name }: { name: IconName }) {
   return (

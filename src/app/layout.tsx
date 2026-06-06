@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getActiveClubContext } from "@/lib/club";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { AppTabs, type AppTab } from "@/components/AppTabs";
+import { Icon } from "@/components/Icon";
 import {
   canAccessConciliation,
   canEditClubData,
@@ -84,6 +85,17 @@ export default async function RootLayout({
               <Link href="/clubs" className="app-action-link app-action-link-secondary">
                 Cambiar club
               </Link>
+
+              <form action="/api/auth/logout" method="post">
+                <button
+                  type="submit"
+                  className="icon-button"
+                  aria-label="Cerrar sesión"
+                  title="Cerrar sesión"
+                >
+                  <Icon name="logout" />
+                </button>
+              </form>
             </div>
           </header>
 

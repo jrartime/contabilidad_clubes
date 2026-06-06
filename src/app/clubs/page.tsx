@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import type { ClubMembershipWithClub } from "@/lib/appTypes";
+import { Icon } from "@/components/Icon";
 
 function getClub(membership: ClubMembershipWithClub) {
   if (Array.isArray(membership.clubes)) return membership.clubes[0] ?? null;
@@ -64,15 +65,19 @@ export default async function ClubsPage() {
                   </div>
                 </div>
 
-                <form action="/api/club/seleccionar" method="post">
-                  <input type="hidden" name="club_id" value={membership.club_id} />
-                  <button
-                    type="submit"
-                    style={{ padding: "8px 12px", cursor: "pointer" }}
-                  >
-                    Usar este club
-                  </button>
-                </form>
+                {!isActive && (
+                  <form action="/api/club/seleccionar" method="post">
+                    <input type="hidden" name="club_id" value={membership.club_id} />
+                    <button
+                      type="submit"
+                      className="icon-button"
+                      aria-label="Activar este club"
+                      title="Activar este club"
+                    >
+                      <Icon name="enter" />
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           );
