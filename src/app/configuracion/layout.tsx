@@ -8,6 +8,7 @@ const SUBTABS = [
   { href: "/configuracion/personal", label: "Personal" },
   { href: "/configuracion/conceptos", label: "Conceptos" },
   { href: "/configuracion/miembros", label: "Miembros" },
+  { href: "/configuracion/roles", label: "Roles" },
 ];
 
 export default function ConfiguracionLayout({ children }: { children: React.ReactNode }) {
