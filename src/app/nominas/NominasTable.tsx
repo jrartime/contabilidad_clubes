@@ -183,6 +183,57 @@ export default function NominasTable({
     return buildFilterHref("/nominas", { ...filterParams, sort: col, dir: nextDir }, []);
   }
 
+  // Auto-cálculo del panel
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  function recomputePanel(form: Record<string, string>): Record<string, string> {
+    const next = { ...form };
+    const bruto = parseDecimalToNumber(form.bruto);
+    const coste = parseDecimalToNumber(form.coste_empresarial);
+
+    // SS = coste - bruto si SS está vacío
+    let ss = parseDecimalToNumber(form.ss);
+    if (!form.ss.trim() && bruto !== null && coste !== null) {
+      ss = r2(coste - bruto);
+      next.ss = toDecimalInputValue(ss);
+    }
+
+    // Bruto imputado = bruto si está vacío
+    let brutoImp = parseDecimalToNumber(form.bruto_imputado);
+    if (!form.bruto_imputado.trim() && bruto !== null) {
+      brutoImp = bruto;
+      next.bruto_imputado = toDecimalInputValue(brutoImp);
+    }
+
+    // SS imputado = SS si está vacío
+    let ssImp = parseDecimalToNumber(form.ss_imputado);
+    if (!form.ss_imputado.trim() && ss !== null) {
+      ssImp = ss;
+      next.ss_imputado = toDecimalInputValue(ssImp);
+    }
+
+    // Importe total = bruto + SS (siempre)
+    if (bruto !== null && ss !== null) {
+      next.importe_total = toDecimalInputValue(r2(bruto + ss));
+    }
+
+    // Importe imputado = bruto_imputado + ss_imputado (siempre)
+    if (brutoImp !== null && ssImp !== null) {
+      next.importe_imputado = toDecimalInputValue(r2(brutoImp + ssImp));
+    }
+
+    return next;
+  }
+
+  function recomputeImputado(form: Record<string, string>): Record<string, string> {
+    const brutoImp = parseDecimalToNumber(form.bruto_imputado);
+    const ssImp = parseDecimalToNumber(form.ss_imputado);
+    if (brutoImp !== null && ssImp !== null) {
+      return { ...form, importe_imputado: toDecimalInputValue(r2(brutoImp + ssImp)) };
+    }
+    return form;
+  }
+
   // Estilos reutilizables del panel
   const pL: React.CSSProperties = { display: "grid", gap: 4, fontSize: 13, fontWeight: 600 };
   const pI: React.CSSProperties = { padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%", boxSizing: "border-box" };
@@ -548,46 +599,44 @@ export default function NominasTable({
                 </label>
               </div>
 
-              {/* Personal */}
-              <label style={pL}>
-                Personal
-                <select value={panelForm.personal_id} onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))} disabled={panelSaving} style={pI}>
-                  <option value="">(sin personal)</option>
-                  {personalOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-
-              {/* Proveedor */}
-              <label style={pL}>
-                Proveedor
-                <select value={panelForm.proveedor_id} onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))} disabled={panelSaving} style={pI}>
-                  <option value="">(sin proveedor)</option>
-                  {proveedorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-
-              {/* Programa */}
-              <label style={pL}>
-                Programa
-                <select value={panelForm.programa_id} onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))} disabled={panelSaving} style={pI}>
-                  <option value="">(sin programa)</option>
-                  {programaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-
-              {/* Categoría + Concepto */}
+              {/* Personal + Proveedor en una fila */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={pL}>
+                  Personal
+                  <select value={panelForm.personal_id} onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                    <option value="">(sin personal)</option>
+                    {personalOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </label>
+                <label style={pL}>
+                  Proveedor
+                  <select value={panelForm.proveedor_id} onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                    <option value="">(sin proveedor)</option>
+                    {proveedorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </label>
+              </div>
+
+              {/* Programa + Categoría + Concepto en una fila */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <label style={pL}>
+                  Programa
+                  <select value={panelForm.programa_id} onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                    <option value="">(sin programa)</option>
+                    {programaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </label>
                 <label style={pL}>
                   Categoría
                   <select value={panelForm.categoria_id} onChange={(e) => setPanelForm((f) => ({ ...f, categoria_id: e.target.value }))} disabled={panelSaving} style={pI}>
-                    <option value="">(sin categoría)</option>
+                    <option value="">(sin cat.)</option>
                     {categoriaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </label>
                 <label style={pL}>
                   Concepto
                   <select value={panelForm.concepto_id} onChange={(e) => setPanelForm((f) => ({ ...f, concepto_id: e.target.value }))} disabled={panelSaving} style={pI}>
-                    <option value="">(sin concepto)</option>
+                    <option value="">(sin conc.)</option>
                     {conceptoOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </label>
@@ -602,22 +651,31 @@ export default function NominasTable({
                 </select>
               </label>
 
-              {/* Importes salariales */}
+              {/* Importes salariales — Bruto + Coste + SS en una fila */}
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.5, marginTop: 4 }}>
                 Importes salariales
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <label style={pL}>
                   Bruto
-                  <input type="text" inputMode="decimal" value={panelForm.bruto} onChange={(e) => setPanelForm((f) => ({ ...f, bruto: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input
+                    type="text" inputMode="decimal" value={panelForm.bruto} disabled={panelSaving} style={pI}
+                    onChange={(e) => setPanelForm((f) => recomputePanel({ ...f, bruto: e.target.value }))}
+                  />
                 </label>
                 <label style={pL}>
                   Coste empresarial
-                  <input type="text" inputMode="decimal" value={panelForm.coste_empresarial} onChange={(e) => setPanelForm((f) => ({ ...f, coste_empresarial: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input
+                    type="text" inputMode="decimal" value={panelForm.coste_empresarial} disabled={panelSaving} style={pI}
+                    onChange={(e) => setPanelForm((f) => recomputePanel({ ...f, coste_empresarial: e.target.value }))}
+                  />
                 </label>
                 <label style={pL}>
                   SS
-                  <input type="text" inputMode="decimal" value={panelForm.ss} onChange={(e) => setPanelForm((f) => ({ ...f, ss: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input
+                    type="text" inputMode="decimal" value={panelForm.ss} disabled={panelSaving} style={pI}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, ss: e.target.value }))}
+                  />
                 </label>
               </div>
 
@@ -625,22 +683,32 @@ export default function NominasTable({
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.5, marginTop: 4 }}>
                 Importes imputados al programa
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
                 <label style={pL}>
                   Bruto imputado
-                  <input type="text" inputMode="decimal" value={panelForm.bruto_imputado} onChange={(e) => setPanelForm((f) => ({ ...f, bruto_imputado: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input
+                    type="text" inputMode="decimal" value={panelForm.bruto_imputado} disabled={panelSaving} style={pI}
+                    onChange={(e) => setPanelForm((f) => recomputeImputado({ ...f, bruto_imputado: e.target.value }))}
+                  />
                 </label>
                 <label style={pL}>
                   SS imputado
-                  <input type="text" inputMode="decimal" value={panelForm.ss_imputado} onChange={(e) => setPanelForm((f) => ({ ...f, ss_imputado: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input
+                    type="text" inputMode="decimal" value={panelForm.ss_imputado} disabled={panelSaving} style={pI}
+                    onChange={(e) => setPanelForm((f) => recomputeImputado({ ...f, ss_imputado: e.target.value }))}
+                  />
                 </label>
                 <label style={pL}>
                   Importe total
-                  <input type="text" inputMode="decimal" value={panelForm.importe_total} onChange={(e) => setPanelForm((f) => ({ ...f, importe_total: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input type="text" inputMode="decimal" value={panelForm.importe_total} disabled={panelSaving} style={{ ...pI, background: "#f8f8f8" }}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, importe_total: e.target.value }))}
+                  />
                 </label>
                 <label style={pL}>
                   Importe imputado
-                  <input type="text" inputMode="decimal" value={panelForm.importe_imputado} onChange={(e) => setPanelForm((f) => ({ ...f, importe_imputado: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input type="text" inputMode="decimal" value={panelForm.importe_imputado} disabled={panelSaving} style={{ ...pI, background: "#f8f8f8" }}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, importe_imputado: e.target.value }))}
+                  />
                 </label>
               </div>
 
