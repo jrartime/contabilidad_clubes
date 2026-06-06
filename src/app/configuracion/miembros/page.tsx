@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import { getMyClubRole, canManageMembers, type ClubRole } from "@/lib/clubRole";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
+import { Icon } from "@/components/Icon";
 import type { ClubMemberWithProfile } from "@/lib/appTypes";
 
 export const dynamic = "force-dynamic";
@@ -103,7 +105,7 @@ async function removeMember(formData: FormData) {
 export default async function MiembrosPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; panel?: string; edit?: string }>;
 }) {
   const sp = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
@@ -118,6 +120,8 @@ export default async function MiembrosPage({
   if (!canManageMembers(myRole)) redirect("/no-autorizado");
 
   const errorMsg = sp.error ? decodeURIComponent(sp.error) : null;
+  const showPanel = sp.panel === "add" || !!sp.edit;
+  const editUserId = sp.edit ?? null;
 
   const { data, error } = await supabase
     .from("club_miembros")
@@ -126,16 +130,26 @@ export default async function MiembrosPage({
     .order("rol", { ascending: true });
 
   const members = (data ?? []) as ClubMemberWithProfile[];
+  const editMember = editUserId ? members.find((m) => m.user_id === editUserId) ?? null : null;
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 16 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
-        Miembros del club
-      </h1>
-
-      <p style={{ marginTop: 0, opacity: 0.75 }}>
-        Tu rol en este club: <b>{myRole}</b>
-      </p>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Miembros del club</h1>
+          <p style={{ margin: "4px 0 0", opacity: 0.75, fontSize: 13 }}>
+            Tu rol: <b>{myRole}</b>
+          </p>
+        </div>
+        <Link
+          href="/configuracion/miembros?panel=add"
+          className="icon-button"
+          aria-label="Añadir miembro"
+          title="Añadir miembro"
+        >
+          <Icon name="new" />
+        </Link>
+      </div>
 
       {errorMsg && (
         <div style={{ border: "1px solid #f5c2c2", background: "#fff5f5", padding: 10, borderRadius: 8, marginBottom: 12 }}>
@@ -144,77 +158,117 @@ export default async function MiembrosPage({
       )}
       {error && <p>Error: {error.message}</p>}
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, marginTop: 12, marginBottom: 14 }}>
-        <h2 style={{ margin: 0, marginBottom: 10, fontSize: 16 }}>Añadir / actualizar miembro</h2>
+      <div style={{ display: "grid", gridTemplateColumns: showPanel ? "1fr 300px" : "1fr", gap: 20, alignItems: "start" }}>
 
-        <form action={addMember} style={{ display: "grid", gap: 10 }}>
-          <input type="hidden" name="club_id" value={clubId} />
+        {/* Listado */}
+        <div style={{ display: "grid", gap: 8 }}>
+          {members.length === 0 && (
+            <p style={{ opacity: 0.7 }}>No hay miembros en este club.</p>
+          )}
+          {members.map((member) => {
+            const email = getProfileEmail(member) ?? member.user_id;
+            const isEditing = editUserId === member.user_id;
+            return (
+              <div
+                key={member.user_id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "10px 12px",
+                  border: isEditing ? "1px solid var(--primary)" : "1px solid #eee",
+                  borderRadius: 8,
+                  background: isEditing ? "var(--primary-bg, #f0f4ff)" : undefined,
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {email}
+                  </div>
+                  <div style={{ opacity: 0.7, fontSize: 13 }}>
+                    rol: <b>{member.rol}</b>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <Link
+                    href={isEditing ? "/configuracion/miembros" : `/configuracion/miembros?edit=${member.user_id}`}
+                    className="icon-button"
+                    aria-label="Editar miembro"
+                    title="Editar miembro"
+                  >
+                    <Icon name="edit" />
+                  </Link>
+                  <form action={removeMember}>
+                    <input type="hidden" name="club_id" value={clubId} />
+                    <input type="hidden" name="user_id" value={member.user_id} />
+                    <ConfirmSubmitButton
+                      className="icon-button"
+                      ariaLabel="Eliminar miembro"
+                      message="¿Eliminar este miembro del club?"
+                    >
+                      <Icon name="delete" />
+                    </ConfirmSubmitButton>
+                  </form>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
-            <label>
-              Email del usuario
-              <input name="email" type="email" required style={{ width: "100%" }} />
-            </label>
-            <label>
-              Rol
-              <select name="rol" defaultValue="viewer" style={{ width: "100%" }}>
-                {CLUB_ROLES.map((role) => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div>
-            <button type="submit" style={{ padding: "0 20px", height: 36, cursor: "pointer" }}>
-              Añadir / actualizar rol
-            </button>
-          </div>
-        </form>
-      </div>
-
-      <h2 style={{ fontSize: 16, marginBottom: 8 }}>Listado ({members.length})</h2>
-
-      <div style={{ display: "grid", gap: 10 }}>
-        {members.map((member) => (
-          <div key={member.user_id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 12 }}>
-            <div style={{ fontWeight: 700 }}>{getProfileEmail(member) ?? member.user_id}</div>
-            <div style={{ opacity: 0.7, marginTop: 2, fontSize: 12 }}>
-              Rol actual: <b>{member.rol}</b>
+        {/* Panel lateral */}
+        {showPanel && (
+          <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 16, position: "sticky", top: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
+                {editMember ? "Editar miembro" : "Añadir miembro"}
+              </h2>
+              <Link href="/configuracion/miembros" style={{ fontSize: 13, opacity: 0.6 }} aria-label="Cerrar panel">
+                ✕
+              </Link>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <form action={updateRole} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {editMember ? (
+              <>
+                <p style={{ margin: "0 0 12px", fontSize: 13, opacity: 0.8, wordBreak: "break-all" }}>
+                  {getProfileEmail(editMember) ?? editMember.user_id}
+                </p>
+                <form action={updateRole} style={{ display: "grid", gap: 10 }}>
+                  <input type="hidden" name="club_id" value={clubId} />
+                  <input type="hidden" name="user_id" value={editMember.user_id} />
+                  <label style={{ display: "grid", gap: 4, fontSize: 14 }}>
+                    Rol
+                    <select name="rol" defaultValue={editMember.rol} style={{ padding: 8 }}>
+                      {CLUB_ROLES.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
+                    Guardar cambios
+                  </button>
+                </form>
+              </>
+            ) : (
+              <form action={addMember} style={{ display: "grid", gap: 10 }}>
                 <input type="hidden" name="club_id" value={clubId} />
-                <input type="hidden" name="user_id" value={member.user_id} />
-                <select name="rol" defaultValue={member.rol ?? "viewer"} style={{ height: 34, padding: "0 8px", fontSize: 13 }}>
-                  {CLUB_ROLES.map((role) => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                </select>
-                <button type="submit" style={{ padding: "0 14px", height: 34, fontSize: 13, cursor: "pointer" }}>
-                  Guardar rol
+                <label style={{ display: "grid", gap: 4, fontSize: 14 }}>
+                  Email del usuario
+                  <input name="email" type="email" required style={{ padding: 8 }} />
+                </label>
+                <label style={{ display: "grid", gap: 4, fontSize: 14 }}>
+                  Rol
+                  <select name="rol" defaultValue="viewer" style={{ padding: 8 }}>
+                    {CLUB_ROLES.map((role) => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
+                  Añadir miembro
                 </button>
               </form>
-
-              <form action={removeMember}>
-                <input type="hidden" name="club_id" value={clubId} />
-                <input type="hidden" name="user_id" value={member.user_id} />
-                <ConfirmSubmitButton
-                  message="¿Eliminar este miembro del club?"
-                  className="icon-button icon-button-danger tooltip-button"
-                  ariaLabel="Eliminar miembro"
-                  style={{ fontSize: 13 }}
-                >
-                  Eliminar
-                </ConfirmSubmitButton>
-              </form>
-            </div>
+            )}
           </div>
-        ))}
-
-        {members.length === 0 && (
-          <p style={{ opacity: 0.7 }}>No hay miembros en este club.</p>
         )}
       </div>
     </div>

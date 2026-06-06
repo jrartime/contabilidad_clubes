@@ -44,8 +44,7 @@ export default async function RootLayout({
         ]
       : []),
     ...(showNominas ? [{ href: "/nominas", label: "Nominas" }] : []),
-    ...((showEditModules || showPersonal) ? [{ href: "/configuracion", label: "Configuración" }] : []),
-    ...(showMembers ? [{ href: "/clubs/members", label: "Miembros" }] : []),
+    ...((showEditModules || showPersonal || showMembers) ? [{ href: "/configuracion", label: "Configuración" }] : []),
   ];
 
   return (
