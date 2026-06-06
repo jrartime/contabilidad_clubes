@@ -212,13 +212,13 @@ export default function NominasTable({
       next.ss_imputado = toDecimalInputValue(ssImp);
     }
 
-    // Importe total = bruto + SS (siempre)
-    if (bruto !== null && ss !== null) {
+    // Importe total = bruto + SS (solo si está vacío)
+    if (!form.importe_total.trim() && bruto !== null && ss !== null) {
       next.importe_total = toDecimalInputValue(r2(bruto + ss));
     }
 
-    // Importe imputado = bruto_imputado + ss_imputado (siempre)
-    if (brutoImp !== null && ssImp !== null) {
+    // Importe imputado = bruto_imputado + ss_imputado (solo si está vacío)
+    if (!form.importe_imputado.trim() && brutoImp !== null && ssImp !== null) {
       next.importe_imputado = toDecimalInputValue(r2(brutoImp + ssImp));
     }
 
@@ -660,14 +660,16 @@ export default function NominasTable({
                   Bruto
                   <input
                     type="text" inputMode="decimal" value={panelForm.bruto} disabled={panelSaving} style={pI}
-                    onChange={(e) => setPanelForm((f) => recomputePanel({ ...f, bruto: e.target.value }))}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, bruto: e.target.value }))}
+                    onBlur={() => setPanelForm((f) => recomputePanel(f))}
                   />
                 </label>
                 <label style={pL}>
                   Coste empresarial
                   <input
                     type="text" inputMode="decimal" value={panelForm.coste_empresarial} disabled={panelSaving} style={pI}
-                    onChange={(e) => setPanelForm((f) => recomputePanel({ ...f, coste_empresarial: e.target.value }))}
+                    onChange={(e) => setPanelForm((f) => ({ ...f, coste_empresarial: e.target.value }))}
+                    onBlur={() => setPanelForm((f) => recomputePanel(f))}
                   />
                 </label>
                 <label style={pL}>
