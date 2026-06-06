@@ -1,6 +1,13 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
+import type { ClubMembershipWithClub } from "@/lib/appTypes";
+
+function getClub(membership: ClubMembershipWithClub) {
+  if (Array.isArray(membership.clubes)) return membership.clubes[0] ?? null;
+  return membership.clubes;
+}
 
 export default async function Home() {
   const supabase = await createSupabaseServerClient();
@@ -8,7 +15,7 @@ export default async function Home() {
 
   const user = userData.user;
   if (!user) redirect("/login");
- 
+
   const activeClubId = await getActiveClubId();
 
   const { data, error } = await supabase
@@ -17,7 +24,7 @@ export default async function Home() {
     .eq("user_id", user.id)
     .order("club_id", { ascending: true });
 
-  const hasClubs = (data ?? []).length > 0;
+  const memberships = (data ?? []) as ClubMembershipWithClub[];
   const hasActiveClub = !!activeClubId;
 
   return (
@@ -28,45 +35,45 @@ export default async function Home() {
 
       {error && <p>Error: {error.message}</p>}
 
-      {/* Caso: no pertenece a ningún club */}
-      {!error && !hasClubs && (
+      {!error && memberships.length === 0 && (
         <div style={{ border: "1px dashed #ccc", padding: 12, borderRadius: 8 }}>
           <p style={{ margin: 0, fontWeight: 600 }}>
-            No perteneces a ningún club todavía.
+            No perteneces a ningun club todavia.
           </p>
           <p style={{ margin: 0, opacity: 0.8 }}>
-            Pide a un administrador que te añada desde “Miembros del club”.
+            Pide a un administrador que te anada desde &quot;Miembros del club&quot;.
           </p>
           <p style={{ marginTop: 10 }}>
-            <a href="/clubs/new">Crear un club</a>
+            <Link href="/clubs/new">Crear un club</Link>
             {" · "}
-            <a href="/clubs">Seleccionar club</a>
+            <Link href="/clubs">Seleccionar club</Link>
           </p>
         </div>
       )}
 
-      {/* Lista de clubes */}
       <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-        {(data ?? []).map((r: any) => {
-          const isActive = activeClubId === r.club_id;
+        {memberships.map((membership) => {
+          const isActive = activeClubId === membership.club_id;
+          const club = getClub(membership);
 
           return (
-            <div key={r.club_id} style={{ border: "1px solid #ddd", padding: 12 }}>
+            <div
+              key={membership.club_id}
+              style={{ border: "1px solid #ddd", padding: 12 }}
+            >
               <div style={{ fontWeight: 700 }}>
-                {r.clubes?.nombre}{" "}
+                {club?.nombre ?? `Club ${membership.club_id}`}{" "}
                 {isActive && (
-                  <span style={{ fontWeight: 600, opacity: 0.7 }}>
-                    (activo)
-                  </span>
+                  <span style={{ fontWeight: 600, opacity: 0.7 }}>(activo)</span>
                 )}
               </div>
 
               <div style={{ opacity: 0.8 }}>
-                id_club: {r.club_id} · rol: {r.rol}
+                id_club: {membership.club_id} · rol: {membership.rol}
               </div>
 
               <div style={{ opacity: 0.8 }}>
-                nif: {r.clubes?.nif ?? "-"} · email: {r.clubes?.email ?? "-"}
+                nif: {club?.nif ?? "-"} · email: {club?.email ?? "-"}
               </div>
 
               <form
@@ -74,7 +81,7 @@ export default async function Home() {
                 method="post"
                 style={{ marginTop: 10 }}
               >
-                <input type="hidden" name="club_id" value={r.club_id} />
+                <input type="hidden" name="club_id" value={membership.club_id} />
                 <button
                   type="submit"
                   style={{ padding: "6px 10px", cursor: "pointer" }}
@@ -87,28 +94,30 @@ export default async function Home() {
         })}
       </div>
 
-      {/* Accesos: solo si hay club activo */}
       <div style={{ marginTop: 16 }}>
-       {!hasActiveClub ? (
-      <p style={{ marginTop: 16 }}>
-       Para acceder a conciliación, primero selecciona un club activo:{" "}
-       <a href="/clubs">Cambiar/seleccionar club</a>
-     </p>
-   ) : (
-    <>
-      <p style={{ marginTop: 16 }}>
-        <a href="/conciliacion/1a1">Ir a Conciliación 1a1</a>
-      </p>
+        {!hasActiveClub ? (
+          <p style={{ marginTop: 16 }}>
+            Para acceder a conciliacion, primero selecciona un club activo:{" "}
+            <Link href="/clubs">Cambiar/seleccionar club</Link>
+          </p>
+        ) : (
+          <>
+            <p style={{ marginTop: 16 }}>
+              <Link href="/conciliacion/1a1">Ir a Conciliacion 1a1</Link>
+            </p>
 
-      <p style={{ marginTop: 12 }}>
-        <a href="/proveedores">Proveedores</a>
-        {" · "}
-        <a href="/contabilidad">Contabilidad</a>
-      </p>
-    </>
-  )}
-</div>
-
+            <p style={{ marginTop: 12 }}>
+              <Link href="/proveedores">Proveedores</Link>
+              <br />
+              <Link href="/programas">Programas</Link>
+              {" · "}
+              <Link href="/contabilidad">Contabilidad</Link>
+              {" · "}
+              <Link href="/bancos">Banco</Link>
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

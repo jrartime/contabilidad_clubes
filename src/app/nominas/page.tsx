@@ -1,18 +1,40 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { readSheet } from "read-excel-file/browser";
 import { getActiveClubId } from "@/lib/club";
-import { getMyClubRole } from "@/lib/clubRole";
+import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
+import { Icon } from "@/components/Icon";
+import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
+import { buildFilterHref } from "@/lib/filters";
+import NominaForm from "./NominaForm";
+import { normalizeDecimalString, parseDecimalToNumber } from "@/lib/decimal";
+import { formatDateEs, formatDecimal } from "@/lib/format";
+import {
+  deleteContabilidadWithDocsAction,
+  deleteDocumentoAction,
+  downloadDocumentoAction,
+  uploadDocumentosAction,
+} from "@/app/contabilidad/actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const NOMINA_TIPO_ID = 3;
-
-function canEdit(role: string | null) {
-  return role === "owner" || role === "admin" || role === "manager";
-}
+type NominasSortKey =
+  | "fecha"
+  | "personal"
+  | "proveedor"
+  | "programa"
+  | "categoria"
+  | "concepto"
+  | "bruto"
+  | "ss"
+  | "importe_total"
+  | "importe_imputado"
+  | "fecha_pago";
+type SortDirection = "asc" | "desc";
 
 function toNullableBigint(v: FormDataEntryValue | null): number | null {
   const s = String(v ?? "").trim();
@@ -29,21 +51,80 @@ function toNullableText(v: FormDataEntryValue | null): string | null {
 function toNullableNumber(v: FormDataEntryValue | null): number | null {
   const s = String(v ?? "").trim();
   if (!s) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
+  return parseDecimalToNumber(s);
 }
 
-function toDateInputValue(v: any): string {
-  if (!v) return "";
-  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  if (typeof v === "string") return v.slice(0, 10);
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  return "";
+function toNumberFromFormValue(v: FormDataEntryValue | null): number {
+  const s = String(v ?? "").trim();
+  const normalized = normalizeDecimalString(s);
+  return Number(normalized);
 }
 
-function toSelectValue(v: any): string {
-  if (v === null || v === undefined || v === "") return "";
-  return String(v);
+function safeNominaRedirect(value: FormDataEntryValue | null) {
+  const redirectTo = String(value ?? "/nominas").trim();
+  return redirectTo.startsWith("/nominas") ? redirectTo : "/nominas";
+}
+
+function appendNominaError(redirectTo: string, error: string) {
+  const separator = redirectTo.includes("?") ? "&" : "?";
+  return `${redirectTo}${separator}error=${encodeURIComponent(error)}`;
+}
+
+function toIsoDateFromExcel(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(raw);
+  if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
+
+  const es = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(raw);
+  if (!es) return raw;
+  const year = es[3].length === 2 ? `20${es[3]}` : es[3];
+  return `${year}-${es[2].padStart(2, "0")}-${es[1].padStart(2, "0")}`;
+}
+
+function toNullableTextFromExcel(value: unknown) {
+  const text = String(value ?? "").trim();
+  return text ? text : null;
+}
+
+function toNullableIntegerFromExcel(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const n = Number(text);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function toNullableDecimalFromExcel(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  return parseDecimalToNumber(value);
+}
+
+function hasAnyExcelValue(row: unknown[]) {
+  return row.slice(0, 16).some((cell) => {
+    if (cell === null || cell === undefined) return false;
+    if (cell instanceof Date) return !Number.isNaN(cell.getTime());
+    return String(cell).trim() !== "";
+  });
+}
+
+function parseProgramaFilterValue(v: string | undefined | null): {
+  isNone: boolean;
+  id: number | null;
+} {
+  const raw = String(v ?? "").trim();
+  if (!raw) return { isNone: false, id: null };
+  if (raw === "none") return { isNone: true, id: null };
+  const id = Number(raw);
+  return Number.isFinite(id) ? { isNone: false, id } : { isNone: false, id: null };
 }
 
 async function upsertNomina(formData: FormData) {
@@ -57,12 +138,12 @@ async function upsertNomina(formData: FormData) {
   }
 
   const proveedor_id = toNullableBigint(formData.get("proveedor_id"));
+  const personal_id = toNullableBigint(formData.get("personal_id"));
   const concepto_id = toNullableBigint(formData.get("concepto_id"));
   const entidad_id = toNullableBigint(formData.get("entidad_id"));
   const programa_id = toNullableBigint(formData.get("programa_id"));
   const categoria_id = toNullableBigint(formData.get("categoria_id"));
 
-  const personal = toNullableText(formData.get("personal"));
   const fecha = toNullableText(formData.get("fecha")); // YYYY-MM-DD
   const fecha_pago = toNullableText(formData.get("fecha_pago")); // YYYY-MM-DD
 
@@ -74,8 +155,8 @@ async function upsertNomina(formData: FormData) {
   const ss_imputado = toNullableNumber(formData.get("ss_imputado"));
 
   // Totales (obligatorios en tu tabla; default 0 en DB, pero aquí validamos)
-  const importe_total = Number(formData.get("importe_total"));
-  const importe_imputado = Number(formData.get("importe_imputado"));
+  const importe_total = toNumberFromFormValue(formData.get("importe_total"));
+  const importe_imputado = toNumberFromFormValue(formData.get("importe_imputado"));
 
   const detalle = toNullableText(formData.get("detalle"));
 
@@ -85,13 +166,16 @@ async function upsertNomina(formData: FormData) {
   if (!Number.isFinite(importe_imputado)) {
     redirect("/nominas?error=importe_imputado%20inv%C3%A1lido");
   }
+  if (!personal_id) {
+    redirect("/nominas?error=personal_id%20obligatorio");
+  }
 
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) redirect("/login");
 
   const myRole = await getMyClubRole(clubId);
-  if (!canEdit(myRole)) redirect("/no-autorizado");
+  if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
   // OJO: forzamos tipo_id = 3 siempre
   const payload: any = {
@@ -99,12 +183,12 @@ async function upsertNomina(formData: FormData) {
     tipo_id: NOMINA_TIPO_ID,
 
     proveedor_id,
+    personal_id,
     concepto_id,
     entidad_id,
     programa_id,
     categoria_id,
 
-    personal,
     fecha,
     fecha_pago,
 
@@ -132,17 +216,18 @@ async function upsertNomina(formData: FormData) {
   redirect("/nominas");
 }
 
-async function deleteNomina(formData: FormData) {
+async function importNominasExcel(formData: FormData) {
   "use server";
 
   const clubId = Number(formData.get("club_id"));
-  const id = Number(formData.get("id_contabilidad"));
+  const redirectTo = safeNominaRedirect(formData.get("redirect_to"));
+  const file = formData.get("excel_file");
 
   if (!clubId || !Number.isFinite(clubId)) {
-    redirect("/nominas?error=club_id%20inv%C3%A1lido");
+    redirect(appendNominaError(redirectTo, "club_id_invalido"));
   }
-  if (!id || !Number.isFinite(id)) {
-    redirect("/nominas?error=id_contabilidad%20inv%C3%A1lido");
+  if (!(file instanceof File) || file.size === 0) {
+    redirect(appendNominaError(redirectTo, "archivo_excel_obligatorio"));
   }
 
   const supabase = await createSupabaseServerClient();
@@ -150,23 +235,74 @@ async function deleteNomina(formData: FormData) {
   if (!userData.user) redirect("/login");
 
   const myRole = await getMyClubRole(clubId);
-  if (!canEdit(myRole)) redirect("/no-autorizado");
+  if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  const { error } = await supabase
-    .from("contabilidad")
-    .delete()
-    .eq("club_id", clubId)
-    .eq("id_contabilidad", id)
-    .eq("tipo_id", NOMINA_TIPO_ID);
+  const rows = (await readSheet(file)) as unknown[][];
+  const dataRows = rows.filter(hasAnyExcelValue);
+  const first = dataRows[0] ?? [];
+  const firstCell = String(first[0] ?? "").trim().toLowerCase();
+  const rowsWithoutHeader =
+    firstCell.includes("personal") || firstCell.includes("empleado")
+      ? dataRows.slice(1)
+      : dataRows;
 
-  if (error) redirect("/nominas?error=" + encodeURIComponent(error.message));
-  redirect("/nominas");
+  const payload = rowsWithoutHeader.map((row) => {
+    const bruto = toNullableDecimalFromExcel(row[3]);
+    const coste_empresarial = toNullableDecimalFromExcel(row[4]);
+    const ss = toNullableDecimalFromExcel(row[5]);
+    const bruto_imputado = toNullableDecimalFromExcel(row[6]);
+    const ss_imputado = toNullableDecimalFromExcel(row[7]);
+    const importeTotal = toNullableDecimalFromExcel(row[14]);
+    const importeImputado = toNullableDecimalFromExcel(row[15]);
+
+    return {
+      club_id: clubId,
+      tipo_id: NOMINA_TIPO_ID,
+      personal_id: toNullableIntegerFromExcel(row[0]),
+      fecha: toIsoDateFromExcel(row[1]),
+      fecha_pago: toIsoDateFromExcel(row[2]),
+      bruto,
+      coste_empresarial,
+      ss,
+      bruto_imputado,
+      ss_imputado,
+      proveedor_id: toNullableIntegerFromExcel(row[8]),
+      categoria_id: toNullableIntegerFromExcel(row[9]),
+      programa_id: toNullableIntegerFromExcel(row[10]),
+      concepto_id: toNullableIntegerFromExcel(row[11]),
+      entidad_id: toNullableIntegerFromExcel(row[12]),
+      detalle: toNullableTextFromExcel(row[13]),
+      importe_total: importeTotal ?? Number(bruto ?? 0) + Number(ss ?? 0),
+      importe_imputado:
+        importeImputado ?? Number(bruto_imputado ?? 0) + Number(ss_imputado ?? 0),
+    };
+  });
+
+  if (payload.length === 0) {
+    redirect(appendNominaError(redirectTo, "excel_sin_datos_importables"));
+  }
+
+  const { error } = await supabase.from("contabilidad").insert(payload);
+  if (error) redirect(appendNominaError(redirectTo, error.message));
+
+  redirect(redirectTo);
 }
 
 export default async function NominasPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string; edit?: string; programa_id?: string }>;
+  searchParams?: Promise<{
+    error?: string;
+    edit?: string;
+    panel?: string;
+    programa_id?: string;
+    personal_id?: string;
+    categoria_id?: string;
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   const sp = (await searchParams) ?? {};
 
@@ -179,38 +315,84 @@ export default async function NominasPage({
   if (!clubId) redirect("/clubs");
 
   const myRole = await getMyClubRole(clubId);
-  const canUserEdit = canEdit(myRole);
+  const canUserEdit = canEditClubData(myRole);
 
   const errorMsg = sp.error ? decodeURIComponent(sp.error) : null;
   const editId = sp.edit ? Number(sp.edit) : null;
+  const isNewPanel = sp.panel === "new";
 
-  const programaFilterId = sp.programa_id ? Number(sp.programa_id) : null;
-  const hasProgramaFilter = !!programaFilterId && Number.isFinite(programaFilterId);
+  const programaFilter = parseProgramaFilterValue(sp.programa_id);
+  const personalFilterId = sp.personal_id ? Number(sp.personal_id) : null;
+  const hasPersonalFilter = !!personalFilterId && Number.isFinite(personalFilterId);
+  const categoriaFilterId = sp.categoria_id ? Number(sp.categoria_id) : null;
+  const hasCategoriaFilter = !!categoriaFilterId && Number.isFinite(categoriaFilterId);
+  const fechaDesde = String(sp.fecha_desde ?? "").trim();
+  const fechaHasta = String(sp.fecha_hasta ?? "").trim();
+  const sortKey = ([
+    "fecha",
+    "personal",
+    "proveedor",
+    "programa",
+    "categoria",
+    "concepto",
+    "bruto",
+    "ss",
+    "importe_total",
+    "importe_imputado",
+    "fecha_pago",
+  ].includes(String(sp.sort))
+    ? sp.sort
+    : "fecha") as NominasSortKey;
+  const sortDirection: SortDirection = sp.dir === "asc" ? "asc" : "desc";
+  const isProgramaNoneFilter = programaFilter.isNone;
+  const programaFilterId = programaFilter.id;
+  const hasProgramaFilter =
+    isProgramaNoneFilter ||
+    (!!programaFilterId && Number.isFinite(programaFilterId));
+  const exportParams = new URLSearchParams();
+  if (hasProgramaFilter) {
+    exportParams.set(
+      "programa_id",
+      isProgramaNoneFilter ? "none" : String(programaFilterId)
+    );
+  }
+  const exportHref = `/nominas/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
-  // Proveedores (del club)
-  const { data: proveedores } = await supabase
+  const proveedoresPromise = supabase
     .from("proveedores")
     .select("id_proveedor, proveedor")
     .eq("club_id", clubId)
+    .eq("activo", true)
     .order("proveedor", { ascending: true });
 
-  // Conceptos / Entidades / Programas (globales)
-  const { data: conceptos } = await supabase
+  const conceptosPromise = supabase
     .from("conceptos")
     .select("id_concepto, concepto")
     .order("concepto", { ascending: true });
 
-  const { data: entidades } = await supabase
+  const entidadesPromise = supabase
     .from("entidades")
     .select("id_entidad, entidad")
     .order("entidad", { ascending: true });
 
+  // Programas primero (solo activos) para filtrar la query principal
   const { data: programas } = await supabase
     .from("programas")
     .select("id_programa, programa")
+    .eq("club_id", clubId)
+    .eq("activo", true)
     .order("programa", { ascending: true });
 
-  const { data: categorias } = await supabase
+  const activeProgramIds = (programas ?? []).map((p: any) => Number(p.id_programa));
+
+  const personalPromise = supabase
+    .from("personal")
+    .select("id_personal, nombre")
+    .eq("club_id", clubId)
+    .eq("activo", true)
+    .order("nombre", { ascending: true });
+
+  const categoriasPromise = supabase
     .from("categorias")
     .select("id_categoria, categoria")
     .order("id_categoria", { ascending: true });
@@ -222,12 +404,12 @@ export default async function NominasPage({
       [
         "id_contabilidad",
         "tipo_id",
-        "personal",
         "bruto",
         "bruto_imputado",
         "coste_empresarial",
         "ss",
         "ss_imputado",
+        "personal_id",
         "proveedor_id",
         "fecha",
         "fecha_pago",
@@ -251,48 +433,91 @@ export default async function NominasPage({
     .eq("tipo_id", NOMINA_TIPO_ID);
 
   if (hasProgramaFilter) {
-    q = q.eq("programa_id", programaFilterId);
+    q = isProgramaNoneFilter ? q.is("programa_id", null) : q.eq("programa_id", programaFilterId);
+  } else {
+    // Sin filtro: excluir nóminas de programas dados de baja
+    if (activeProgramIds.length > 0) {
+      q = q.or(`programa_id.is.null,programa_id.in.(${activeProgramIds.join(",")})`);
+    } else {
+      q = q.is("programa_id", null);
+    }
   }
+  if (hasPersonalFilter) q = q.eq("personal_id", personalFilterId);
+  if (hasCategoriaFilter) q = q.eq("categoria_id", categoriaFilterId);
+  if (fechaDesde) q = q.gte("fecha", fechaDesde);
+  if (fechaHasta) q = q.lte("fecha", fechaHasta);
 
-  const { data: rows, error } = await q
+  const nominasPromise = q
     .order("fecha", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(5000);
+    .limit(500);
+
+  const [
+    { data: proveedores },
+    { data: conceptos },
+    { data: entidades },
+    { data: personal },
+    { data: categorias },
+    { data: rows, error },
+  ] = await Promise.all([
+    proveedoresPromise,
+    conceptosPromise,
+    entidadesPromise,
+    personalPromise,
+    categoriasPromise,
+    nominasPromise,
+  ]);
 
   const rowsAny = (rows ?? []) as any[];
 
   // Totales por categoría (A/B/otras) como contabilidad
-  type Tot = { total: number; imputado: number; count: number };
+  type Tot = {
+    total: number;
+    imputado: number;
+    bruto: number;
+    coste: number;
+    count: number;
+  };
   const totales = rowsAny.reduce(
     (acc, r: any) => {
       const total = Number(r.importe_total ?? 0) || 0;
       const imputado = Number(r.importe_imputado ?? 0) || 0;
+      const bruto = Number(r.bruto ?? 0) || 0;
+      const coste = Number(r.coste_empresarial ?? 0) || 0;
       const cat = String(r.categoria_ref?.categoria ?? "").toUpperCase();
 
       acc.global.total += total;
       acc.global.imputado += imputado;
+      acc.global.bruto += bruto;
+      acc.global.coste += coste;
       acc.global.count += 1;
 
       if (cat === "A") {
         acc.A.total += total;
         acc.A.imputado += imputado;
+        acc.A.bruto += bruto;
+        acc.A.coste += coste;
         acc.A.count += 1;
       } else if (cat === "B") {
         acc.B.total += total;
         acc.B.imputado += imputado;
+        acc.B.bruto += bruto;
+        acc.B.coste += coste;
         acc.B.count += 1;
       } else {
         acc.otras.total += total;
         acc.otras.imputado += imputado;
+        acc.otras.bruto += bruto;
+        acc.otras.coste += coste;
         acc.otras.count += 1;
       }
       return acc;
     },
     {
-      global: { total: 0, imputado: 0, count: 0 } as Tot,
-      A: { total: 0, imputado: 0, count: 0 } as Tot,
-      B: { total: 0, imputado: 0, count: 0 } as Tot,
-      otras: { total: 0, imputado: 0, count: 0 } as Tot,
+      global: { total: 0, imputado: 0, bruto: 0, coste: 0, count: 0 } as Tot,
+      A: { total: 0, imputado: 0, bruto: 0, coste: 0, count: 0 } as Tot,
+      B: { total: 0, imputado: 0, bruto: 0, coste: 0, count: 0 } as Tot,
+      otras: { total: 0, imputado: 0, bruto: 0, coste: 0, count: 0 } as Tot,
     }
   );
 
@@ -308,15 +533,15 @@ export default async function NominasPage({
         [
           "id_contabilidad",
           "tipo_id",
-          "personal",
           "bruto",
           "bruto_imputado",
           "coste_empresarial",
-          "ss",
-          "ss_imputado",
-          "proveedor_id",
-          "fecha",
-          "fecha_pago",
+        "ss",
+        "ss_imputado",
+        "personal_id",
+        "proveedor_id",
+        "fecha",
+        "fecha_pago",
           "importe_total",
           "importe_imputado",
           "concepto_id",
@@ -335,20 +560,149 @@ export default async function NominasPage({
     editRow = (one as any) ?? null;
   }
 
+  const documentos =
+    editRow?.id_contabilidad
+      ? (
+          await supabase
+            .from("documentos")
+            .select("id_documento:id, filename, mime:content_type, size:size_bytes, created_at")
+            .or(
+              `contabilidad_id.eq.${editRow.id_contabilidad},nomina_id.eq.${editRow.id_contabilidad}`
+            )
+            .order("created_at", { ascending: false })
+        ).data ?? []
+      : [];
+
+  const editRedirectParams = new URLSearchParams();
+  if (hasProgramaFilter) {
+    editRedirectParams.set(
+      "programa_id",
+      isProgramaNoneFilter ? "none" : String(programaFilterId)
+    );
+  }
+  if (editRow?.id_contabilidad) {
+    editRedirectParams.set("edit", String(editRow.id_contabilidad));
+  }
+  const editRedirectHref = editRow
+    ? `/nominas?${editRedirectParams.toString()}#form`
+    : "/nominas";
+  const isDrawerOpen = canUserEdit && (isNewPanel || !!editRow);
+  const nominaFilterParams = {
+    fecha_desde: fechaDesde,
+    fecha_hasta: fechaHasta,
+    personal_id: hasPersonalFilter ? String(personalFilterId) : "",
+    programa_id: hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : "",
+    categoria_id: hasCategoriaFilter ? String(categoriaFilterId) : "",
+  };
+  const listHref = buildFilterHref("/nominas", nominaFilterParams, []);
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 600,
+    display: "grid",
+    gap: 4,
+  };
+
+  const personalMap = new Map<number, string>();
+  (personal ?? []).forEach((p: any) => {
+    if (p?.id_personal) personalMap.set(Number(p.id_personal), p.nombre ?? "");
+  });
+  const sortedRowsAny = [...rowsAny].sort((a: any, b: any) => {
+    function value(row: any) {
+      switch (sortKey) {
+        case "personal":
+          return personalMap.get(Number(row.personal_id)) ?? "";
+        case "proveedor":
+          return row.proveedor?.proveedor ?? "";
+        case "programa":
+          return row.programa_ref?.programa ?? "";
+        case "categoria":
+          return row.categoria_ref?.categoria ?? "";
+        case "concepto":
+          return row.concepto_ref?.concepto ?? "";
+        default:
+          return row[sortKey];
+      }
+    }
+
+    const av = value(a);
+    const bv = value(b);
+    let result = 0;
+
+    if (["bruto", "ss", "importe_total", "importe_imputado"].includes(sortKey)) {
+      result = Number(av ?? 0) - Number(bv ?? 0);
+    } else {
+      result = String(av ?? "").localeCompare(String(bv ?? ""), "es", {
+        sensitivity: "base",
+      });
+    }
+
+    return sortDirection === "asc" ? result : -result;
+  });
+
+  function sortHref(nextSort: NominasSortKey) {
+    return buildFilterHref(
+      "/nominas",
+      {
+        ...nominaFilterParams,
+        sort: nextSort,
+        dir: sortKey === nextSort && sortDirection === "asc" ? "desc" : "asc",
+      },
+      []
+    );
+  }
+
+  function sortHeader(nextSort: NominasSortKey, label: string) {
+    const active = sortKey === nextSort;
+    return (
+      <th
+        style={{
+          textAlign: "left",
+          borderBottom: "1px solid #ddd",
+          padding: 8,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <Link
+          href={sortHref(nextSort)}
+          className="table-sort-button"
+          aria-label={`Ordenar por ${label}`}
+        >
+          <span>{label}</span>
+          <span aria-hidden="true">{active ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}</span>
+        </Link>
+      </th>
+    );
+  }
+
+
+  const compactSelectStyle: React.CSSProperties = {
+    height: 32,
+    minHeight: 32,
+    lineHeight: "normal",
+    padding: "0 8px",
+    fontSize: 13,
+    boxSizing: "border-box",
+    display: "block",
+    width: "100%",
+  };
+
   return (
-    <div style={{ maxWidth: 1300, margin: "0 auto", padding: 16 }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+    <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
+      <div className="page-toolbar" style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Nóminas</h1>
-        <a href="/" style={{ marginLeft: "auto" }}>
-          ← Volver
-        </a>
-      </div>
-
-      <p style={{ marginTop: 6, opacity: 0.75 }}>
-        club_id: <b>{clubId}</b> · tipo_id: <b>{NOMINA_TIPO_ID}</b> · tu rol: <b>{myRole}</b>
-      </p>
-
-      {errorMsg && (
+        {canUserEdit ? (
+          <Link
+            href={`${buildFilterHref("/nominas", { ...nominaFilterParams, panel: "new" }, [])}#form`}
+            className="icon-button tooltip-button"
+            aria-label="Nueva nomina"
+            style={{ marginLeft: "auto" }}
+          >
+            <Icon name="new" />
+          </Link>
+        ) : null}
+</div>
+{errorMsg && (
         <div
           style={{
             border: "1px solid #f5c2c2",
@@ -364,8 +718,12 @@ export default async function NominasPage({
       {error && <p>Error: {error.message}</p>}
 
       {/* Formulario */}
-      <div
+      {isDrawerOpen ? (
+        <>
+          <Link href={listHref} className="drawer-backdrop" aria-label="Cerrar panel" />
+          <div
         id="form"
+        className="side-drawer"
         style={{
           border: "1px solid #ddd",
           borderRadius: 10,
@@ -380,248 +738,175 @@ export default async function NominasPage({
         {!canUserEdit ? (
           <p style={{ margin: 0, opacity: 0.8 }}>No tienes permisos para crear/editar nóminas.</p>
         ) : (
-          <form
-            key={editRow ? `edit-${editRow.id_contabilidad}` : "new"}
+          <NominaForm
             action={upsertNomina}
-            style={{ display: "grid", gap: 10 }}
-          >
-            <input type="hidden" name="club_id" value={clubId} />
-            <input type="hidden" name="id_contabilidad" value={editRow?.id_contabilidad ?? ""} />
-
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr 1fr" }}>
-              <label>
-                Personal
-                <input
-                  name="personal"
-                  defaultValue={editRow?.personal ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                Fecha (devengo)
-                <input
-                  name="fecha"
-                  type="date"
-                  defaultValue={toDateInputValue(editRow?.fecha)}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                Fecha pago
-                <input
-                  name="fecha_pago"
-                  type="date"
-                  defaultValue={toDateInputValue(editRow?.fecha_pago)}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr" }}>
-              <label>
-                Bruto
-                <input
-                  name="bruto"
-                  type="number"
-                  step="0.01"
-                  defaultValue={editRow?.bruto ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                Bruto imputado
-                <input
-                  name="bruto_imputado"
-                  type="number"
-                  step="0.01"
-                  defaultValue={editRow?.bruto_imputado ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                Coste empresarial
-                <input
-                  name="coste_empresarial"
-                  type="number"
-                  step="0.01"
-                  defaultValue={editRow?.coste_empresarial ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                SS
-                <input
-                  name="ss"
-                  type="number"
-                  step="0.01"
-                  defaultValue={editRow?.ss ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                SS imputado
-                <input
-                  name="ss_imputado"
-                  type="number"
-                  step="0.01"
-                  defaultValue={editRow?.ss_imputado ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1.2fr 1fr 1fr" }}>
-              <label>
-                Proveedor
-                <select
-                  name="proveedor_id"
-                  defaultValue={toSelectValue(editRow?.proveedor_id)}
-                  style={{ width: "100%", padding: 8 }}
-                >
-                  <option value="">(sin proveedor)</option>
-                  {(proveedores ?? []).map((p: any) => (
-                    <option key={p.id_proveedor} value={p.id_proveedor}>
-                      {p.proveedor}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Categoría (A/B/C)
-                <select
-                  name="categoria_id"
-                  defaultValue={toSelectValue(editRow?.categoria_id)}
-                  style={{ width: "100%", padding: 8 }}
-                >
-                  <option value="">(sin categoría)</option>
-                  {(categorias ?? []).map((c: any) => (
-                    <option key={c.id_categoria} value={c.id_categoria}>
-                      {c.categoria}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Programa
-                <select
-                  name="programa_id"
-                  defaultValue={toSelectValue(editRow?.programa_id)}
-                  style={{ width: "100%", padding: 8 }}
-                >
-                  <option value="">(sin programa)</option>
-                  {(programas ?? []).map((p: any) => (
-                    <option key={p.id_programa} value={p.id_programa}>
-                      {p.programa}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr 1fr" }}>
-              <label>
-                Concepto
-                <select
-                  name="concepto_id"
-                  defaultValue={toSelectValue(editRow?.concepto_id)}
-                  style={{ width: "100%", padding: 8 }}
-                >
-                  <option value="">(sin concepto)</option>
-                  {(conceptos ?? []).map((c: any) => (
-                    <option key={c.id_concepto} value={c.id_concepto}>
-                      {c.concepto}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Entidad
-                <select
-                  name="entidad_id"
-                  defaultValue={toSelectValue(editRow?.entidad_id)}
-                  style={{ width: "100%", padding: 8 }}
-                >
-                  <option value="">(sin entidad)</option>
-                  {(entidades ?? []).map((e: any) => (
-                    <option key={e.id_entidad} value={e.id_entidad}>
-                      {e.entidad}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Detalle
-                <input
-                  name="detalle"
-                  defaultValue={editRow?.detalle ?? ""}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
-              <label>
-                Importe total
-                <input
-                  name="importe_total"
-                  type="number"
-                  step="0.01"
-                  required
-                  defaultValue={editRow?.importe_total ?? 0}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-
-              <label>
-                Importe imputado
-                <input
-                  name="importe_imputado"
-                  type="number"
-                  step="0.01"
-                  required
-                  defaultValue={editRow?.importe_imputado ?? 0}
-                  style={{ width: "100%", padding: 8 }}
-                />
-              </label>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
-                {editRow ? "Guardar cambios" : "Crear nómina"}
-              </button>
-              {editRow && (
-                <a href="/nominas" style={{ opacity: 0.8 }}>
-                  Cancelar edición
-                </a>
-              )}
-            </div>
-          </form>
+            clubId={clubId}
+            editRow={editRow}
+            personal={personal ?? []}
+            proveedores={proveedores ?? []}
+            conceptos={conceptos ?? []}
+            entidades={entidades ?? []}
+            programas={programas ?? []}
+            categorias={categorias ?? []}
+            documentos={documentos}
+            uploadDocumentosAction={uploadDocumentosAction}
+            deleteDocumentoAction={deleteDocumentoAction}
+            downloadDocumentoAction={downloadDocumentoAction}
+            redirectTo={editRedirectHref}
+          />
         )}
-      </div>
+        {!editRow && canUserEdit ? (
+          <div
+            style={{
+              borderTop: "1px solid #e5e7eb",
+              marginTop: 14,
+              paddingTop: 14,
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: 14 }}>Importar desde Excel</h3>
+            <div
+              style={{
+                border: "1px solid #dbeafe",
+                background: "#eff6ff",
+                borderRadius: 8,
+                padding: 10,
+                fontSize: 13,
+                lineHeight: 1.45,
+              }}
+            >
+              El archivo debe tener la primera hoja con estas columnas en este orden:
+              <br />
+              personal_id, fecha, fecha_pago, bruto, coste_empresarial, ss,
+              bruto_imputado, ss_imputado, proveedor_id, categoria_id, programa_id,
+              concepto_id, entidad_id, detalle, importe_total, importe_imputado.
+              <br />
+              La primera fila puede contener cabeceras. Las fechas pueden estar como
+              fecha de Excel, AAAA-MM-DD o DD/MM/AAAA. Usa formato .xlsx.
+            </div>
+            <form action={importNominasExcel} style={{ display: "grid", gap: 10 }}>
+              <input type="hidden" name="club_id" value={clubId} />
+              <input type="hidden" name="redirect_to" value={listHref} />
+              <label style={labelStyle}>
+                Archivo Excel
+                <input
+                  name="excel_file"
+                  type="file"
+                  accept=".xlsx"
+                  required
+                  style={compactSelectStyle}
+                />
+              </label>
+              <div className="drawer-actions">
+                <button
+                  type="submit"
+                  className="icon-button tooltip-button"
+                  aria-label="Importar nominas desde Excel"
+                >
+                  <Icon name="upload" />
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+        {editRow && (
+          <div className="danger-zone">
+            <form action={deleteContabilidadWithDocsAction}>
+              <input type="hidden" name="club_id" value={clubId} />
+              <input type="hidden" name="id_contabilidad" value={editRow.id_contabilidad} />
+              <input type="hidden" name="expected_tipo_id" value={NOMINA_TIPO_ID} />
+              <input
+                type="hidden"
+                name="redirect_to"
+                value={
+                  hasProgramaFilter
+                    ? `/nominas?programa_id=${isProgramaNoneFilter ? "none" : programaFilterId}`
+                    : "/nominas"
+                }
+              />
+              <ConfirmSubmitButton
+                message="Se eliminara la nomina y todos sus documentos. Continuar?"
+                className="icon-button icon-button-danger tooltip-button"
+                ariaLabel="Eliminar nomina"
+              >
+                <Icon name="delete" />
+              </ConfirmSubmitButton>
+            </form>
+          </div>
+        )}
+          </div>
+        </>
+      ) : null}
 
       {/* Filtro por programa */}
-      <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginTop: 10 }}>
+      <AutoSubmitFilters action="/nominas">
+        <label className="filter-field">
+          <span>Desde</span>
+          <div className="filter-control-row">
+            <input type="date" name="fecha_desde" defaultValue={fechaDesde} />
+            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["fecha_desde"])} className="filter-reset-button" aria-label="Limpiar desde">X</Link>
+          </div>
+        </label>
+        <label className="filter-field">
+          <span>Hasta</span>
+          <div className="filter-control-row">
+            <input type="date" name="fecha_hasta" defaultValue={fechaHasta} />
+            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["fecha_hasta"])} className="filter-reset-button" aria-label="Limpiar hasta">X</Link>
+          </div>
+        </label>
+        <label className="filter-field">
+          <span>Personal</span>
+          <div className="filter-control-row">
+            <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
+              <option value="">Todos</option>
+              {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
+            </select>
+            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["personal_id"])} className="filter-reset-button" aria-label="Limpiar personal">X</Link>
+          </div>
+        </label>
+        <label className="filter-field">
+          <span>Programa</span>
+          <div className="filter-control-row">
+            <select name="programa_id" defaultValue={hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : ""}>
+              <option value="">Todos</option>
+              <option value="none">(sin programa)</option>
+              {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.programa}</option>)}
+            </select>
+            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["programa_id"])} className="filter-reset-button" aria-label="Limpiar programa">X</Link>
+          </div>
+        </label>
+        <label className="filter-field">
+          <span>Categoría</span>
+          <div className="filter-control-row">
+            <select name="categoria_id" defaultValue={hasCategoriaFilter ? String(categoriaFilterId) : ""}>
+              <option value="">Todas</option>
+              {(categorias ?? []).map((c: any) => <option key={c.id_categoria} value={c.id_categoria}>{c.categoria}</option>)}
+            </select>
+            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["categoria_id"])} className="filter-reset-button" aria-label="Limpiar categoria">X</Link>
+          </div>
+        </label>
+      </AutoSubmitFilters>
+
+      <div style={{ display: "none" }}>
         <form method="get" action="/nominas" style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
           {editId ? <input type="hidden" name="edit" value={String(editId)} /> : null}
 
-          <label>
+          <label style={labelStyle}>
             Filtrar por programa
             <select
               name="programa_id"
-              defaultValue={hasProgramaFilter ? String(programaFilterId) : ""}
-              style={{ display: "block", padding: 8, minWidth: 260 }}
+              defaultValue={
+                hasProgramaFilter
+                  ? isProgramaNoneFilter
+                    ? "none"
+                    : String(programaFilterId)
+                  : ""
+              }
+              style={{ ...compactSelectStyle, minWidth: 260 }}
             >
               <option value="">(todos)</option>
+              <option value="none">(sin programa)</option>
               {(programas ?? []).map((p: any) => (
                 <option key={p.id_programa} value={p.id_programa}>
                   {p.programa}
@@ -637,6 +922,19 @@ export default async function NominasPage({
           <Link href="/nominas" style={{ padding: "10px 12px", opacity: 0.8 }}>
             Quitar filtro
           </Link>
+
+          <a
+            href={exportHref}
+            style={{
+              padding: "10px 12px",
+              background: "#111",
+              color: "#fff",
+              borderRadius: 8,
+              textDecoration: "none",
+            }}
+          >
+            Exportar nóminas
+          </a>
         </form>
       </div>
 
@@ -658,77 +956,87 @@ export default async function NominasPage({
         <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(4, 1fr)" }}>
           <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
             <div style={{ fontWeight: 700 }}>Global ({totales.global.count})</div>
-            <div>Total: <b>{totales.global.total.toFixed(2)}</b></div>
-            <div>Imputado: <b>{totales.global.imputado.toFixed(2)}</b></div>
+            <div>Bruto: <b>{formatDecimal(totales.global.bruto)}</b></div>
+            <div>Coste empresarial: <b>{formatDecimal(totales.global.coste)}</b></div>
+            <div>Total: <b>{formatDecimal(totales.global.total)}</b></div>
+            <div>Imputado: <b>{formatDecimal(totales.global.imputado)}</b></div>
           </div>
 
           <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
             <div style={{ fontWeight: 700 }}>Categoría A ({totales.A.count})</div>
-            <div>Total: <b>{totales.A.total.toFixed(2)}</b></div>
-            <div>Imputado: <b>{totales.A.imputado.toFixed(2)}</b></div>
+            <div>Bruto: <b>{formatDecimal(totales.A.bruto)}</b></div>
+            <div>Coste empresarial: <b>{formatDecimal(totales.A.coste)}</b></div>
+            <div>Total: <b>{formatDecimal(totales.A.total)}</b></div>
+            <div>Imputado: <b>{formatDecimal(totales.A.imputado)}</b></div>
           </div>
 
           <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
             <div style={{ fontWeight: 700 }}>Categoría B ({totales.B.count})</div>
-            <div>Total: <b>{totales.B.total.toFixed(2)}</b></div>
-            <div>Imputado: <b>{totales.B.imputado.toFixed(2)}</b></div>
+            <div>Bruto: <b>{formatDecimal(totales.B.bruto)}</b></div>
+            <div>Coste empresarial: <b>{formatDecimal(totales.B.coste)}</b></div>
+            <div>Total: <b>{formatDecimal(totales.B.total)}</b></div>
+            <div>Imputado: <b>{formatDecimal(totales.B.imputado)}</b></div>
           </div>
 
           <div style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
             <div style={{ fontWeight: 700 }}>Sin categoría / otras ({totales.otras.count})</div>
-            <div>Total: <b>{totales.otras.total.toFixed(2)}</b></div>
-            <div>Imputado: <b>{totales.otras.imputado.toFixed(2)}</b></div>
+            <div>Bruto: <b>{formatDecimal(totales.otras.bruto)}</b></div>
+            <div>Coste empresarial: <b>{formatDecimal(totales.otras.coste)}</b></div>
+            <div>Total: <b>{formatDecimal(totales.otras.total)}</b></div>
+            <div>Imputado: <b>{formatDecimal(totales.otras.imputado)}</b></div>
           </div>
         </div>
       </div>
 
       {/* Listado */}
       <h2 style={{ fontSize: 16, marginTop: 16, marginBottom: 8 }}>
-        Registros de nóminas {hasProgramaFilter ? `(programa_id: ${programaFilterId})` : ""} ({rowsAny.length})
+        Registros de nóminas {
+          hasProgramaFilter
+            ? isProgramaNoneFilter
+              ? "(sin programa)"
+              : `(programa_id: ${programaFilterId})`
+            : ""
+        } ({rowsAny.length})
       </h2>
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
-              {[
-                "Fecha",
-                "Personal",
-                "Proveedor",
-                "Programa",
-                "Categoría",
-                "Concepto",
-                "Bruto",
-                "SS",
-                "Total",
-                "Imputado",
-                "Pago",
-                "Acciones",
-              ].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: "left",
-                    borderBottom: "1px solid #ddd",
-                    padding: 8,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
+              {sortHeader("fecha", "Fecha")}
+              {sortHeader("personal", "Personal")}
+              {sortHeader("proveedor", "Proveedor")}
+              {sortHeader("programa", "Programa")}
+              {sortHeader("categoria", "Categoria")}
+              {sortHeader("concepto", "Concepto")}
+              {sortHeader("bruto", "Bruto")}
+              {sortHeader("ss", "SS")}
+              {sortHeader("importe_total", "Total")}
+              {sortHeader("importe_imputado", "Imputado")}
+              {sortHeader("fecha_pago", "Pago")}
+              <th
+                style={{
+                  textAlign: "left",
+                  borderBottom: "1px solid #ddd",
+                  padding: 8,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Acciones
+              </th>
             </tr>
           </thead>
 
           <tbody>
-            {rowsAny.map((r: any) => (
+            {sortedRowsAny.map((r: any) => (
               <tr key={r.id_contabilidad}>
                 <td style={{ padding: 8, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>
-                  {r.fecha ?? "-"}
+                  {formatDateEs(r.fecha)}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {r.personal ?? "-"}
+                  {personalMap.get(Number(r.personal_id)) ??
+                    (r.personal_id ? `id ${r.personal_id}` : "-")}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
@@ -748,37 +1056,35 @@ export default async function NominasPage({
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {Number(r.bruto ?? 0).toFixed(2)}
+                  {formatDecimal(r.bruto ?? 0)}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {Number(r.ss ?? 0).toFixed(2)}
+                  {formatDecimal(r.ss ?? 0)}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {Number(r.importe_total ?? 0).toFixed(2)}
+                  {formatDecimal(r.importe_total ?? 0)}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {Number(r.importe_imputado ?? 0).toFixed(2)}
+                  {formatDecimal(r.importe_imputado ?? 0)}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee", whiteSpace: "nowrap" }}>
-                  {r.fecha_pago ?? "-"}
+                  {formatDateEs(r.fecha_pago)}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
                   {canUserEdit ? (
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <Link href={`/nominas?edit=${r.id_contabilidad}#form`}>Editar</Link>
-
-                      <form action={deleteNomina}>
-                        <input type="hidden" name="club_id" value={clubId} />
-                        <input type="hidden" name="id_contabilidad" value={r.id_contabilidad} />
-                        <ConfirmSubmitButton message="¿Seguro que quieres eliminar esta nómina?">
-                          Eliminar
-                        </ConfirmSubmitButton>
-                      </form>
+                    <div className="row-actions">
+                      <Link
+                        href={`/nominas?edit=${r.id_contabilidad}#form`}
+                        className="icon-button tooltip-button"
+                        aria-label="Editar nomina"
+                      >
+                        <Icon name="edit" />
+                      </Link>
                     </div>
                   ) : (
                     <span style={{ opacity: 0.6 }}>—</span>

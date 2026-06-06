@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { cache } from "react";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
@@ -12,16 +13,15 @@ export async function createSupabaseServerClient() {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: any) {
-          // ❗ En Server Components Next no permite modificar cookies.
-          // Lo ignoramos aquí. Para auth refresh real usamos middleware/route handlers.
+        set(name: string, value: string, options: CookieOptions) {
+          // Server Components no siempre pueden modificar cookies.
           try {
             cookieStore.set({ name, value, ...options });
           } catch {
             // noop
           }
         },
-        remove(name: string, options: any) {
+        remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options, maxAge: 0 });
           } catch {
@@ -33,3 +33,8 @@ export async function createSupabaseServerClient() {
   );
 }
 
+export const getCurrentUser = cache(async () => {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.auth.getUser();
+  return data.user ?? null;
+});

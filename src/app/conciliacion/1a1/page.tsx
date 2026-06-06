@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
@@ -29,10 +28,7 @@ export default async function Conciliacion1a1Page() {
     <div style={{ maxWidth: 1300, margin: "0 auto", padding: 16 }}>
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Conciliación 1 a 1</h1>
-        <Link href="/" style={{ marginLeft: "auto" }}>
-          ← Volver
-        </Link>
-      </div>
+</div>
 
       {error && (
         <p style={{ marginTop: 12 }}>

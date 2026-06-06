@@ -1,18 +1,32 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
-import { getMyClubRole, canManageMembers } from "@/lib/clubRole";
+import { getMyClubRole, canManageMembers, type ClubRole } from "@/lib/clubRole";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
+import type { ClubMemberWithProfile } from "@/lib/appTypes";
 
+const CLUB_ROLES: ClubRole[] = ["owner", "admin", "manager", "viewer"];
+
+function parseRole(value: FormDataEntryValue | null): ClubRole | null {
+  const role = String(value ?? "").trim();
+  return CLUB_ROLES.includes(role as ClubRole) ? (role as ClubRole) : null;
+}
+
+function getProfileEmail(member: ClubMemberWithProfile): string | null {
+  if (Array.isArray(member.perfiles)) return member.perfiles[0]?.email ?? null;
+  return member.perfiles?.email ?? null;
+}
 
 async function addMember(formData: FormData) {
   "use server";
 
   const email = String(formData.get("email") ?? "").trim();
-  const rol = String(formData.get("rol") ?? "viewer").trim();
+  const rol = parseRole(formData.get("rol")) ?? "viewer";
   const clubId = Number(formData.get("club_id"));
 
-  if (!clubId || !Number.isFinite(clubId)) redirect("/clubs/members?error=club_id%20inv%C3%A1lido");
+  if (!clubId || !Number.isFinite(clubId)) {
+    redirect("/clubs/members?error=club_id%20invalido");
+  }
   if (!email) redirect("/clubs/members?error=Email%20obligatorio");
 
   const supabase = await createSupabaseServerClient();
@@ -38,11 +52,13 @@ async function updateRole(formData: FormData) {
 
   const clubId = Number(formData.get("club_id"));
   const userId = String(formData.get("user_id") ?? "");
-  const newRol = String(formData.get("rol") ?? "");
+  const newRol = parseRole(formData.get("rol"));
 
-  if (!clubId || !Number.isFinite(clubId)) redirect("/clubs/members?error=club_id%20inv%C3%A1lido");
-  if (!userId) redirect("/clubs/members?error=user_id%20inv%C3%A1lido");
-  if (!newRol) redirect("/clubs/members?error=rol%20inv%C3%A1lido");
+  if (!clubId || !Number.isFinite(clubId)) {
+    redirect("/clubs/members?error=club_id%20invalido");
+  }
+  if (!userId) redirect("/clubs/members?error=user_id%20invalido");
+  if (!newRol) redirect("/clubs/members?error=rol%20invalido");
 
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -68,8 +84,10 @@ async function removeMember(formData: FormData) {
   const clubId = Number(formData.get("club_id"));
   const userId = String(formData.get("user_id") ?? "");
 
-  if (!clubId || !Number.isFinite(clubId)) redirect("/clubs/members?error=club_id%20inv%C3%A1lido");
-  if (!userId) redirect("/clubs/members?error=user_id%20inv%C3%A1lido");
+  if (!clubId || !Number.isFinite(clubId)) {
+    redirect("/clubs/members?error=club_id%20invalido");
+  }
+  if (!userId) redirect("/clubs/members?error=user_id%20invalido");
 
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -91,8 +109,9 @@ async function removeMember(formData: FormData) {
 export default async function ClubMembersPage({
   searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: Promise<{ error?: string }>;
 }) {
+  const sp = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -104,13 +123,15 @@ export default async function ClubMembersPage({
   const myRole = await getMyClubRole(clubId);
   if (!canManageMembers(myRole)) redirect("/no-autorizado");
 
-  const errorMsg = searchParams?.error ? decodeURIComponent(searchParams.error) : null;
+  const errorMsg = sp.error ? decodeURIComponent(sp.error) : null;
 
-  const { data: members, error } = await supabase
+  const { data, error } = await supabase
     .from("club_miembros")
     .select("user_id, rol, perfiles:user_id (email)")
     .eq("club_id", clubId)
     .order("rol", { ascending: true });
+
+  const members = (data ?? []) as ClubMemberWithProfile[];
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: 16 }}>
@@ -123,15 +144,32 @@ export default async function ClubMembersPage({
       </p>
 
       {errorMsg && (
-        <div style={{ border: "1px solid #f5c2c2", background: "#fff5f5", padding: 10, borderRadius: 8 }}>
+        <div
+          style={{
+            border: "1px solid #f5c2c2",
+            background: "#fff5f5",
+            padding: 10,
+            borderRadius: 8,
+          }}
+        >
           <b>Error:</b> {errorMsg}
         </div>
       )}
 
       {error && <p>Error: {error.message}</p>}
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, marginTop: 12, marginBottom: 14 }}>
-        <h2 style={{ margin: 0, marginBottom: 10, fontSize: 16 }}>Añadir / actualizar miembro</h2>
+      <div
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 8,
+          padding: 12,
+          marginTop: 12,
+          marginBottom: 14,
+        }}
+      >
+        <h2 style={{ margin: 0, marginBottom: 10, fontSize: 16 }}>
+          Anadir / actualizar miembro
+        </h2>
 
         <form action={addMember} style={{ display: "grid", gap: 10 }}>
           <input type="hidden" name="club_id" value={clubId} />
@@ -144,15 +182,16 @@ export default async function ClubMembersPage({
           <label>
             Rol
             <select name="rol" defaultValue="viewer" style={{ width: "100%", padding: 8 }}>
-              <option value="owner">owner</option>
-              <option value="admin">admin</option>
-              <option value="manager">manager</option>
-              <option value="viewer">viewer</option>
+              {CLUB_ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
             </select>
           </label>
 
           <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
-            Añadir / actualizar rol
+            Anadir / actualizar rol
           </button>
         </form>
       </div>
@@ -160,38 +199,39 @@ export default async function ClubMembersPage({
       <h2 style={{ fontSize: 16, marginBottom: 8 }}>Listado</h2>
 
       <div style={{ display: "grid", gap: 10 }}>
-        {(members ?? []).map((m: any) => (
-          <div key={m.user_id} style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}>
-            <div style={{ fontWeight: 700 }}>{m.perfiles?.email ?? m.user_id}</div>
-            <div style={{ opacity: 0.8, marginTop: 2 }}>rol actual: <b>{m.rol}</b></div>
+        {members.map((member) => (
+          <div
+            key={member.user_id}
+            style={{ border: "1px solid #eee", borderRadius: 8, padding: 10 }}
+          >
+            <div style={{ fontWeight: 700 }}>{getProfileEmail(member) ?? member.user_id}</div>
+            <div style={{ opacity: 0.8, marginTop: 2 }}>
+              rol actual: <b>{member.rol}</b>
+            </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-              {/* Cambiar rol */}
-              <form action={updateRole} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <form
+                action={updateRole}
+                style={{ display: "flex", gap: 8, alignItems: "center" }}
+              >
                 <input type="hidden" name="club_id" value={clubId} />
-                <input type="hidden" name="user_id" value={m.user_id} />
-                <select name="rol" defaultValue={m.rol} style={{ padding: 6 }}>
-                  <option value="owner">owner</option>
-                  <option value="admin">admin</option>
-                  <option value="manager">manager</option>
-                  <option value="viewer">viewer</option>
+                <input type="hidden" name="user_id" value={member.user_id} />
+                <select name="rol" defaultValue={member.rol} style={{ padding: 6 }}>
+                  {CLUB_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
                 </select>
                 <button type="submit" style={{ padding: "6px 10px", cursor: "pointer" }}>
                   Guardar rol
                 </button>
               </form>
 
-              {/* Eliminar */}
               <form action={removeMember}>
                 <input type="hidden" name="club_id" value={clubId} />
-                <input type="hidden" name="user_id" value={m.user_id} />
-                <button
-                  type="submit"
-                  style={{ padding: "6px 10px", cursor: "pointer" }}
-                   >
-                  <ConfirmSubmitButton message="¿Eliminar miembro?">Eliminar</ConfirmSubmitButton>
-                </button>
-
+                <input type="hidden" name="user_id" value={member.user_id} />
+                <ConfirmSubmitButton message="Eliminar miembro?">Eliminar</ConfirmSubmitButton>
               </form>
             </div>
           </div>

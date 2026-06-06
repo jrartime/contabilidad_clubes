@@ -1,6 +1,13 @@
+import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
+import type { ClubMembershipWithClub } from "@/lib/appTypes";
+
+function getClub(membership: ClubMembershipWithClub) {
+  if (Array.isArray(membership.clubes)) return membership.clubes[0] ?? null;
+  return membership.clubes;
+}
 
 export default async function ClubsPage() {
   const supabase = await createSupabaseServerClient();
@@ -12,9 +19,11 @@ export default async function ClubsPage() {
 
   const { data, error } = await supabase
     .from("club_miembros")
-    .select("club_id, rol, clubes(id_club, nombre, nif, email)")  
+    .select("club_id, rol, clubes(id_club, nombre, nif, email)")
     .eq("user_id", user.id)
     .order("club_id", { ascending: true });
+
+  const memberships = (data ?? []) as ClubMembershipWithClub[];
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
@@ -25,11 +34,12 @@ export default async function ClubsPage() {
       {error && <p>Error: {error.message}</p>}
 
       <div style={{ display: "grid", gap: 12 }}>
-        {(data ?? []).map((r: any) => {
-          const isActive = activeClubId === r.club_id;
+        {memberships.map((membership) => {
+          const isActive = activeClubId === membership.club_id;
+          const club = getClub(membership);
           return (
             <div
-              key={r.club_id}
+              key={membership.club_id}
               style={{
                 border: "1px solid #ddd",
                 padding: 12,
@@ -39,7 +49,7 @@ export default async function ClubsPage() {
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 800 }}>
-                    {r.clubes?.nombre}{" "}
+                    {club?.nombre ?? `Club ${membership.club_id}`}{" "}
                     {isActive && (
                       <span style={{ fontWeight: 600, opacity: 0.7 }}>
                         (activo)
@@ -47,15 +57,15 @@ export default async function ClubsPage() {
                     )}
                   </div>
                   <div style={{ opacity: 0.8 }}>
-                    id_club: {r.club_id} · rol: {r.rol}
+                    id_club: {membership.club_id} · rol: {membership.rol}
                   </div>
                   <div style={{ opacity: 0.8 }}>
-                    nif: {r.clubes?.nif ?? "-"} · email: {r.clubes?.email ?? "-"}
+                    nif: {club?.nif ?? "-"} · email: {club?.email ?? "-"}
                   </div>
                 </div>
 
                 <form action="/api/club/seleccionar" method="post">
-                  <input type="hidden" name="club_id" value={r.club_id} />
+                  <input type="hidden" name="club_id" value={membership.club_id} />
                   <button
                     type="submit"
                     style={{ padding: "8px 12px", cursor: "pointer" }}
@@ -68,13 +78,14 @@ export default async function ClubsPage() {
           );
         })}
       </div>
-      <a href="/clubs/new" style={{ display: "inline-block", marginBottom: 12 }}>
+
+      <Link href="/clubs/new" style={{ display: "inline-block", marginTop: 12 }}>
         + Nuevo club
-      </a>
+      </Link>
 
       <p style={{ marginTop: 14, opacity: 0.8 }}>
-        Nota: el club activo se guarda en una cookie para que funcione también en
-        páginas server (SSR).
+        Nota: el club activo se guarda en una cookie para que funcione tambien en
+        paginas server (SSR).
       </p>
     </div>
   );
