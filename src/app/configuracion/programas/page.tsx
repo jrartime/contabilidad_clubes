@@ -544,7 +544,7 @@ export default async function ProgramasPage({
                         style={{ gap: 6 }}
                         aria-label="Editar programa"
                       >
-                        <Icon name="edit" className="button-icon" />
+                        <Icon name="edit" />
                         {row.activo ? "Editar" : "Ver"}
                       </Link>
                     </div>

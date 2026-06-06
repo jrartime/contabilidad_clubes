@@ -583,7 +583,7 @@ export default function ContabilidadTable({
                         style={{ gap: 6 }}
                         aria-label="Editar asiento"
                       >
-                        <Icon name="edit" className="button-icon" />
+                        <Icon name="edit" />
                         Editar
                       </Link>
 

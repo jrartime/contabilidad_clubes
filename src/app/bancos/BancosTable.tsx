@@ -339,7 +339,7 @@ export default function BancosTable({
                         style={{ gap: 6 }}
                         aria-label="Editar movimiento"
                       >
-                        <Icon name="edit" className="button-icon" />
+                        <Icon name="edit" />
                         Editar
                       </Link>
                     ) : (

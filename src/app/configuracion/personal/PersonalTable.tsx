@@ -406,7 +406,7 @@ export default function PersonalTable({
                         setPanelMode("edit");
                       }}
                     >
-                      <Icon name="edit" className="button-icon" />
+                      <Icon name="edit" />
                       {r.activo ? "Editar" : "Ver"}
                     </button>
                   ) : (

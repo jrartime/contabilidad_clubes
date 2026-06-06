@@ -581,7 +581,7 @@ export default async function ProveedoresPage({
                         style={{ gap: 6 }}
                         aria-label={row.activo ? "Editar proveedor" : "Ver proveedor de baja"}
                       >
-                        <Icon name="edit" className="button-icon" />
+                        <Icon name="edit" />
                         {row.activo ? "Editar" : "Ver"}
                       </Link>
                     </div>

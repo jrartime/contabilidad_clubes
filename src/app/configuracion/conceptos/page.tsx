@@ -305,7 +305,7 @@ export default async function ConceptosPage({
                         style={{ gap: 6 }}
                         aria-label="Editar concepto"
                       >
-                        <Icon name="edit" className="button-icon" />
+                        <Icon name="edit" />
                         Editar
                       </Link>
                     </div>
