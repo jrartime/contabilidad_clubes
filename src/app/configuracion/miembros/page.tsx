@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, createSupabaseAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import { getMyClubRole, canManageMembers, type ClubRole } from "@/lib/clubRole";
@@ -47,6 +47,42 @@ async function addMember(formData: FormData) {
 
   if (error) redirect("/configuracion/miembros?error=" + encodeURIComponent(error.message));
   redirect("/configuracion/miembros");
+}
+
+async function inviteAndAddMember(formData: FormData) {
+  "use server";
+
+  const email = String(formData.get("email") ?? "").trim();
+  const rol = parseRole(formData.get("rol")) ?? "viewer";
+  const clubId = Number(formData.get("club_id"));
+
+  if (!clubId || !Number.isFinite(clubId)) redirect("/configuracion/miembros?error=club_id%20invalido");
+  if (!email) redirect("/configuracion/miembros?error=Email%20obligatorio");
+
+  const supabase = await createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) redirect("/login");
+
+  const myRole = await getMyClubRole(clubId);
+  if (!canManageMembers(myRole)) redirect("/no-autorizado");
+
+  // Invitar al usuario vía Admin API (crea cuenta + envía email con enlace)
+  const admin = createSupabaseAdminClient();
+  const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
+
+  if (inviteError && !inviteError.message.includes("already registered")) {
+    redirect("/configuracion/miembros?error=" + encodeURIComponent(inviteError.message));
+  }
+
+  // Añadir al club (el usuario ya existe en auth.users tras la invitación)
+  const { error } = await supabase.rpc("anadir_miembro_por_email", {
+    p_club_id: clubId,
+    p_email: email,
+    p_rol: rol,
+  });
+
+  if (error) redirect("/configuracion/miembros?error=" + encodeURIComponent(error.message));
+  redirect("/configuracion/miembros?ok=invited");
 }
 
 async function updateRole(formData: FormData) {
@@ -105,7 +141,7 @@ async function removeMember(formData: FormData) {
 export default async function MiembrosPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string; panel?: string; edit?: string }>;
+  searchParams?: Promise<{ error?: string; panel?: string; edit?: string; ok?: string }>;
 }) {
   const sp = (await searchParams) ?? {};
   const supabase = await createSupabaseServerClient();
@@ -120,6 +156,7 @@ export default async function MiembrosPage({
   if (!canManageMembers(myRole)) redirect("/no-autorizado");
 
   const errorMsg = sp.error ? decodeURIComponent(sp.error) : null;
+  const okMsg = sp.ok === "invited" ? "Invitación enviada y miembro añadido al club." : null;
   const showPanel = sp.panel === "add" || !!sp.edit;
   const editUserId = sp.edit ?? null;
 
@@ -154,6 +191,11 @@ export default async function MiembrosPage({
       {errorMsg && (
         <div style={{ border: "1px solid #f5c2c2", background: "#fff5f5", padding: 10, borderRadius: 8, marginBottom: 12 }}>
           <b>Error:</b> {errorMsg}
+        </div>
+      )}
+      {okMsg && (
+        <div style={{ border: "1px solid #b7e4c7", background: "#f0fff4", padding: 10, borderRadius: 8, marginBottom: 12 }}>
+          ✓ {okMsg}
         </div>
       )}
       {error && <p>Error: {error.message}</p>}
@@ -266,6 +308,18 @@ export default async function MiembrosPage({
                 <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
                   Añadir miembro
                 </button>
+                <div style={{ borderTop: "1px solid #eee", paddingTop: 10 }}>
+                  <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.7 }}>
+                    ¿El usuario aún no tiene cuenta?
+                  </p>
+                  <button
+                    type="submit"
+                    formAction={inviteAndAddMember}
+                    style={{ padding: "10px 12px", cursor: "pointer", width: "100%" }}
+                  >
+                    Invitar por email y añadir
+                  </button>
+                </div>
               </form>
             )}
           </div>

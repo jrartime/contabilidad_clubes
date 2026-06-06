@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
@@ -30,6 +31,15 @@ export async function createSupabaseServerClient() {
         },
       },
     }
+  );
+}
+
+/** Cliente con service role — solo usar en Server Actions, nunca exponer al cliente */
+export function createSupabaseAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   );
 }
 
