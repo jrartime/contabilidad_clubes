@@ -1005,6 +1005,7 @@ export default async function NominasPage({
         programas={programas ?? []}
         conceptos={conceptos ?? []}
         categorias={categorias ?? []}
+        entidades={entidades ?? []}
         filterParams={nominaFilterParams}
         sortKey={sortKey}
         sortDir={sortDirection}

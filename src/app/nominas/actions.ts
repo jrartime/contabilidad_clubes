@@ -23,10 +23,15 @@ export async function updateNominaAction(payload: {
   programa_id?: number | null;
   concepto_id?: number | null;
   categoria_id?: number | null;
+  entidad_id?: number | null;
   bruto?: string | number | null;
+  coste_empresarial?: string | number | null;
   ss?: string | number | null;
+  bruto_imputado?: string | number | null;
+  ss_imputado?: string | number | null;
   importe_total?: string | number | null;
   importe_imputado?: string | number | null;
+  detalle?: string | null;
 }) {
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -45,11 +50,16 @@ export async function updateNominaAction(payload: {
   if ("proveedor_id" in payload)   update.proveedor_id    = payload.proveedor_id ?? null;
   if ("programa_id" in payload)    update.programa_id     = payload.programa_id ?? null;
   if ("concepto_id" in payload)    update.concepto_id     = payload.concepto_id ?? null;
-  if ("categoria_id" in payload)   update.categoria_id    = payload.categoria_id ?? null;
-  if ("bruto" in payload)          update.bruto           = toNum(payload.bruto ?? null);
-  if ("ss" in payload)             update.ss              = toNum(payload.ss ?? null);
-  if ("importe_total" in payload)  update.importe_total   = toNum(payload.importe_total ?? null);
-  if ("importe_imputado" in payload) update.importe_imputado = toNum(payload.importe_imputado ?? null);
+  if ("categoria_id" in payload)       update.categoria_id       = payload.categoria_id ?? null;
+  if ("entidad_id" in payload)         update.entidad_id         = payload.entidad_id ?? null;
+  if ("bruto" in payload)              update.bruto              = toNum(payload.bruto ?? null);
+  if ("coste_empresarial" in payload)  update.coste_empresarial  = toNum(payload.coste_empresarial ?? null);
+  if ("ss" in payload)                 update.ss                 = toNum(payload.ss ?? null);
+  if ("bruto_imputado" in payload)     update.bruto_imputado     = toNum(payload.bruto_imputado ?? null);
+  if ("ss_imputado" in payload)        update.ss_imputado        = toNum(payload.ss_imputado ?? null);
+  if ("importe_total" in payload)      update.importe_total      = toNum(payload.importe_total ?? null);
+  if ("importe_imputado" in payload)   update.importe_imputado   = toNum(payload.importe_imputado ?? null);
+  if ("detalle" in payload)            update.detalle            = payload.detalle || null;
 
   const { error } = await supabase
     .from("contabilidad")

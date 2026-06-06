@@ -23,15 +23,21 @@ type NominaRow = {
   programa_id: number | null;
   concepto_id: number | null;
   categoria_id: number | null;
+  entidad_id: number | null;
   bruto: number | null;
+  coste_empresarial: number | null;
   ss: number | null;
+  bruto_imputado: number | null;
+  ss_imputado: number | null;
   importe_total: number | null;
   importe_imputado: number | null;
+  detalle: string | null;
   // embedded joins (read-only display)
   proveedor?: { proveedor: string } | null;
   programa_ref?: { programa: string } | null;
   categoria_ref?: { categoria: string } | null;
   concepto_ref?: { concepto: string } | null;
+  entidad_ref?: { entidad: string } | null;
 };
 
 type Option = { id: number; label: string };
@@ -50,6 +56,7 @@ export default function NominasTable({
   programas,
   conceptos,
   categorias,
+  entidades,
   filterParams,
   sortKey,
   sortDir,
@@ -61,6 +68,7 @@ export default function NominasTable({
   programas: { id_programa: number; programa: string; anio?: number | null }[];
   conceptos: { id_concepto: number; concepto: string }[];
   categorias: { id_categoria: number; categoria: string }[];
+  entidades: { id_entidad: number; entidad: string }[];
   filterParams: FilterParams;
   sortKey: SortKey;
   sortDir: "asc" | "desc";
@@ -87,10 +95,15 @@ export default function NominasTable({
       programa_id: r.programa_id != null ? String(r.programa_id) : "",
       concepto_id: r.concepto_id != null ? String(r.concepto_id) : "",
       categoria_id: r.categoria_id != null ? String(r.categoria_id) : "",
+      entidad_id: r.entidad_id != null ? String(r.entidad_id) : "",
       bruto: toDecimalInputValue(r.bruto),
+      coste_empresarial: toDecimalInputValue(r.coste_empresarial),
       ss: toDecimalInputValue(r.ss),
+      bruto_imputado: toDecimalInputValue(r.bruto_imputado),
+      ss_imputado: toDecimalInputValue(r.ss_imputado),
       importe_total: toDecimalInputValue(r.importe_total),
       importe_imputado: toDecimalInputValue(r.importe_imputado),
+      detalle: r.detalle ?? "",
     });
   }, []);
 
@@ -115,10 +128,15 @@ export default function NominasTable({
       programa_id: panelForm.programa_id ? Number(panelForm.programa_id) : null,
       concepto_id: panelForm.concepto_id ? Number(panelForm.concepto_id) : null,
       categoria_id: panelForm.categoria_id ? Number(panelForm.categoria_id) : null,
+      entidad_id: panelForm.entidad_id ? Number(panelForm.entidad_id) : null,
       bruto: toNum(panelForm.bruto),
+      coste_empresarial: toNum(panelForm.coste_empresarial),
       ss: toNum(panelForm.ss),
+      bruto_imputado: toNum(panelForm.bruto_imputado),
+      ss_imputado: toNum(panelForm.ss_imputado),
       importe_total: toNum(panelForm.importe_total),
       importe_imputado: toNum(panelForm.importe_imputado),
+      detalle: panelForm.detalle || null,
     })
       .then(() => { router.refresh(); closeEditPanel(); })
       .catch((e: unknown) => alert(e instanceof Error ? e.message : String(e)))
@@ -143,12 +161,14 @@ export default function NominasTable({
   }));
   const conceptoOptions: Option[] = conceptos.map((c) => ({ id: c.id_concepto, label: c.concepto }));
   const categoriaOptions: Option[] = categorias.map((c) => ({ id: c.id_categoria, label: c.categoria }));
+  const entidadOptions: Option[] = entidades.map((e) => ({ id: e.id_entidad, label: e.entidad }));
 
   const personalById = new Map(personalOptions.map((o) => [o.id, o.label]));
   const proveedorById = new Map(proveedorOptions.map((o) => [o.id, o.label]));
   const programaById = new Map(programaOptions.map((o) => [o.id, o.label]));
   const conceptoById = new Map(conceptoOptions.map((o) => [o.id, o.label]));
   const categoriaById = new Map(categoriaOptions.map((o) => [o.id, o.label]));
+  const entidadById = new Map(entidadOptions.map((o) => [o.id, o.label]));
 
   function save(id_contabilidad: number, patch: Omit<Parameters<typeof updateNominaAction>[0], "id_contabilidad">) {
     startTransition(() => {
@@ -162,6 +182,10 @@ export default function NominasTable({
     const nextDir = sortKey === col && sortDir === "asc" ? "desc" : "asc";
     return buildFilterHref("/nominas", { ...filterParams, sort: col, dir: nextDir }, []);
   }
+
+  // Estilos reutilizables del panel
+  const pL: React.CSSProperties = { display: "grid", gap: 4, fontSize: 13, fontWeight: 600 };
+  const pI: React.CSSProperties = { padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%", boxSizing: "border-box" };
 
   const thBase: React.CSSProperties = {
     textAlign: "left",
@@ -514,145 +538,117 @@ export default function NominasTable({
             <div className="side-drawer-body" style={{ display: "grid", gap: 12 }}>
               {/* Fechas */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  Fecha
-                  <input
-                    type="date"
-                    value={panelForm.fecha}
-                    onChange={(e) => setPanelForm((f) => ({ ...f, fecha: e.target.value }))}
-                    disabled={panelSaving}
-                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                  />
+                <label style={pL}>
+                  Fecha (devengo)
+                  <input type="date" value={panelForm.fecha} onChange={(e) => setPanelForm((f) => ({ ...f, fecha: e.target.value }))} disabled={panelSaving} style={pI} />
                 </label>
-                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                <label style={pL}>
                   Fecha pago
-                  <input
-                    type="date"
-                    value={panelForm.fecha_pago}
-                    onChange={(e) => setPanelForm((f) => ({ ...f, fecha_pago: e.target.value }))}
-                    disabled={panelSaving}
-                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                  />
+                  <input type="date" value={panelForm.fecha_pago} onChange={(e) => setPanelForm((f) => ({ ...f, fecha_pago: e.target.value }))} disabled={panelSaving} style={pI} />
                 </label>
               </div>
 
               {/* Personal */}
-              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <label style={pL}>
                 Personal
-                <select
-                  value={panelForm.personal_id}
-                  onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))}
-                  disabled={panelSaving}
-                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                >
+                <select value={panelForm.personal_id} onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))} disabled={panelSaving} style={pI}>
                   <option value="">(sin personal)</option>
                   {personalOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </select>
               </label>
 
               {/* Proveedor */}
-              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <label style={pL}>
                 Proveedor
-                <select
-                  value={panelForm.proveedor_id}
-                  onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))}
-                  disabled={panelSaving}
-                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                >
+                <select value={panelForm.proveedor_id} onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))} disabled={panelSaving} style={pI}>
                   <option value="">(sin proveedor)</option>
                   {proveedorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </select>
               </label>
 
               {/* Programa */}
-              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
+              <label style={pL}>
                 Programa
-                <select
-                  value={panelForm.programa_id}
-                  onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))}
-                  disabled={panelSaving}
-                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                >
+                <select value={panelForm.programa_id} onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))} disabled={panelSaving} style={pI}>
                   <option value="">(sin programa)</option>
                   {programaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </select>
               </label>
 
-              {/* Categoria */}
-              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                Categoría
-                <select
-                  value={panelForm.categoria_id}
-                  onChange={(e) => setPanelForm((f) => ({ ...f, categoria_id: e.target.value }))}
-                  disabled={panelSaving}
-                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                >
-                  <option value="">(sin categoría)</option>
-                  {categoriaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-
-              {/* Concepto */}
-              <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                Concepto
-                <select
-                  value={panelForm.concepto_id}
-                  onChange={(e) => setPanelForm((f) => ({ ...f, concepto_id: e.target.value }))}
-                  disabled={panelSaving}
-                  style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                >
-                  <option value="">(sin concepto)</option>
-                  {conceptoOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-
-              {/* Importes */}
+              {/* Categoría + Concepto */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  Bruto
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={panelForm.bruto}
-                    onChange={(e) => setPanelForm((f) => ({ ...f, bruto: e.target.value }))}
-                    disabled={panelSaving}
-                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                  />
+                <label style={pL}>
+                  Categoría
+                  <select value={panelForm.categoria_id} onChange={(e) => setPanelForm((f) => ({ ...f, categoria_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                    <option value="">(sin categoría)</option>
+                    {categoriaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
                 </label>
-                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  SS
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={panelForm.ss}
-                    onChange={(e) => setPanelForm((f) => ({ ...f, ss: e.target.value }))}
-                    disabled={panelSaving}
-                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                  />
-                </label>
-                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  Importe total
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={panelForm.importe_total}
-                    onChange={(e) => setPanelForm((f) => ({ ...f, importe_total: e.target.value }))}
-                    disabled={panelSaving}
-                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                  />
-                </label>
-                <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  Importe imputado
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={panelForm.importe_imputado}
-                    onChange={(e) => setPanelForm((f) => ({ ...f, importe_imputado: e.target.value }))}
-                    disabled={panelSaving}
-                    style={{ padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%" }}
-                  />
+                <label style={pL}>
+                  Concepto
+                  <select value={panelForm.concepto_id} onChange={(e) => setPanelForm((f) => ({ ...f, concepto_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                    <option value="">(sin concepto)</option>
+                    {conceptoOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
                 </label>
               </div>
+
+              {/* Entidad */}
+              <label style={pL}>
+                Entidad
+                <select value={panelForm.entidad_id} onChange={(e) => setPanelForm((f) => ({ ...f, entidad_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                  <option value="">(sin entidad)</option>
+                  {entidadOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+
+              {/* Importes salariales */}
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.5, marginTop: 4 }}>
+                Importes salariales
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={pL}>
+                  Bruto
+                  <input type="text" inputMode="decimal" value={panelForm.bruto} onChange={(e) => setPanelForm((f) => ({ ...f, bruto: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+                <label style={pL}>
+                  Coste empresarial
+                  <input type="text" inputMode="decimal" value={panelForm.coste_empresarial} onChange={(e) => setPanelForm((f) => ({ ...f, coste_empresarial: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+                <label style={pL}>
+                  SS
+                  <input type="text" inputMode="decimal" value={panelForm.ss} onChange={(e) => setPanelForm((f) => ({ ...f, ss: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+              </div>
+
+              {/* Imputados */}
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.5, marginTop: 4 }}>
+                Importes imputados al programa
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label style={pL}>
+                  Bruto imputado
+                  <input type="text" inputMode="decimal" value={panelForm.bruto_imputado} onChange={(e) => setPanelForm((f) => ({ ...f, bruto_imputado: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+                <label style={pL}>
+                  SS imputado
+                  <input type="text" inputMode="decimal" value={panelForm.ss_imputado} onChange={(e) => setPanelForm((f) => ({ ...f, ss_imputado: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+                <label style={pL}>
+                  Importe total
+                  <input type="text" inputMode="decimal" value={panelForm.importe_total} onChange={(e) => setPanelForm((f) => ({ ...f, importe_total: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+                <label style={pL}>
+                  Importe imputado
+                  <input type="text" inputMode="decimal" value={panelForm.importe_imputado} onChange={(e) => setPanelForm((f) => ({ ...f, importe_imputado: e.target.value }))} disabled={panelSaving} style={pI} />
+                </label>
+              </div>
+
+              {/* Detalle */}
+              <label style={pL}>
+                Detalle
+                <input type="text" value={panelForm.detalle} onChange={(e) => setPanelForm((f) => ({ ...f, detalle: e.target.value }))} disabled={panelSaving} style={pI} />
+              </label>
             </div>
 
             <div className="drawer-actions">
