@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef } from "react";
 import { parseDecimalToNumber } from "@/lib/decimal";
+import { Icon } from "@/components/Icon";
 
 type NominaFormProps = {
   action: (formData: FormData) => void | Promise<void>;
@@ -18,6 +19,7 @@ type NominaFormProps = {
   deleteDocumentoAction: (formData: FormData) => void | Promise<void>;
   downloadDocumentoAction: (formData: FormData) => void | Promise<void>;
   redirectTo: string;
+  cancelHref: string;
 };
 
 function parseNumber(value: string): number | null {
@@ -54,6 +56,7 @@ export default function NominaForm({
   deleteDocumentoAction,
   downloadDocumentoAction,
   redirectTo,
+  cancelHref,
 }: NominaFormProps) {
   const toDateInputValue = (value: any): string => {
     if (!value) return "";
@@ -392,13 +395,17 @@ export default function NominaForm({
         <button
           type="submit"
           className="icon-button tooltip-button"
-          aria-label={editRow ? "Guardar cambios" : "Crear nomina"}
+          aria-label={editRow ? "Guardar cambios" : "Crear nómina"}
         >
-          {editRow ? "Guardar cambios" : "Crear nómina"}
+          <Icon name="save" />
         </button>
         {editRow && (
-          <a href="/nominas" style={{ opacity: 0.8 }}>
-            Cancelar edición
+          <a
+            href={cancelHref}
+            className="icon-button icon-button-secondary tooltip-button"
+            aria-label="Cancelar edición"
+          >
+            <Icon name="logout" />
           </a>
         )}
       </div>

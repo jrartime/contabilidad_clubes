@@ -574,20 +574,6 @@ export default async function NominasPage({
         ).data ?? []
       : [];
 
-  const editRedirectParams = new URLSearchParams();
-  if (hasProgramaFilter) {
-    editRedirectParams.set(
-      "programa_id",
-      isProgramaNoneFilter ? "none" : String(programaFilterId)
-    );
-  }
-  if (editRow?.id_contabilidad) {
-    editRedirectParams.set("edit", String(editRow.id_contabilidad));
-  }
-  const editRedirectHref = editRow
-    ? `/nominas?${editRedirectParams.toString()}#form`
-    : "/nominas";
-  const isDrawerOpen = canUserEdit && (isNewPanel || !!editRow);
   const nominaFilterParams = {
     fecha_desde: fechaDesde,
     fecha_hasta: fechaHasta,
@@ -596,6 +582,16 @@ export default async function NominasPage({
     categoria_id: hasCategoriaFilter ? String(categoriaFilterId) : "",
   };
   const listHref = buildFilterHref("/nominas", nominaFilterParams, []);
+  const editRedirectParams = new URLSearchParams(
+    listHref.split("?")[1] ?? ""
+  );
+  if (editRow?.id_contabilidad) {
+    editRedirectParams.set("edit", String(editRow.id_contabilidad));
+  }
+  const editRedirectHref = editRow
+    ? `/nominas?${editRedirectParams.toString()}#form`
+    : listHref;
+  const isDrawerOpen = canUserEdit && (isNewPanel || !!editRow);
 
   const labelStyle: React.CSSProperties = {
     fontSize: 12,
@@ -754,6 +750,7 @@ export default async function NominasPage({
             deleteDocumentoAction={deleteDocumentoAction}
             downloadDocumentoAction={downloadDocumentoAction}
             redirectTo={editRedirectHref}
+            cancelHref={listHref}
           />
         )}
         {!editRow && canUserEdit ? (

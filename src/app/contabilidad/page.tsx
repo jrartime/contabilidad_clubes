@@ -117,19 +117,28 @@ async function upsertAsiento(formData: FormData) {
         .eq("id_contabilidad", Number(id))
     : await supabase.from("contabilidad").insert(payload);
 
+  const redirectTo = String(formData.get("redirect_to") ?? "").trim();
+
+  if (error) {
+    if (redirectTo) {
+      const sep = redirectTo.includes("?") ? "&" : "?";
+      redirect(`${redirectTo}${sep}error=${encodeURIComponent(error.message)}`);
+    }
+    const redirectParams = new URLSearchParams();
+    if (programaFilter.isNone) redirectParams.set("programa_id", "none");
+    if (programaFilter.id) redirectParams.set("programa_id", String(programaFilter.id));
+    if (proveedorFilterId) redirectParams.set("proveedor_id", String(proveedorFilterId));
+    if (limitValue) redirectParams.set("limit", limitValue);
+    redirect(`/contabilidad?${redirectParams.toString()}&error=${encodeURIComponent(error.message)}`);
+  }
+
+  if (redirectTo) redirect(redirectTo);
+
   const redirectParams = new URLSearchParams();
   if (programaFilter.isNone) redirectParams.set("programa_id", "none");
   if (programaFilter.id) redirectParams.set("programa_id", String(programaFilter.id));
   if (proveedorFilterId) redirectParams.set("proveedor_id", String(proveedorFilterId));
   if (limitValue) redirectParams.set("limit", limitValue);
-
-  if (error) {
-    redirect(
-      `/contabilidad?${redirectParams.toString()}&error=` +
-        encodeURIComponent(error.message)
-    );
-  }
-
   redirect(
     redirectParams.toString()
       ? `/contabilidad?${redirectParams.toString()}`
@@ -540,16 +549,16 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         ).data ?? []
       : [];
 
-  const editRedirectParams = new URLSearchParams();
-  if (programaFilterValue) editRedirectParams.set("programa_id", programaFilterValue);
-  if (proveedorFilterValue) editRedirectParams.set("proveedor_id", proveedorFilterValue);
-  if (limitValue) editRedirectParams.set("limit", limitValue);
+  const listHref = exportParams.toString()
+    ? `/contabilidad?${exportParams.toString()}`
+    : "/contabilidad";
+  const editRedirectParams = new URLSearchParams(exportParams);
   if (editRow?.id_contabilidad) {
     editRedirectParams.set("edit", String(editRow.id_contabilidad));
   }
   const editRedirectHref = editRow
     ? `/contabilidad?${editRedirectParams.toString()}#form`
-    : "/contabilidad";
+    : listHref;
   const isDrawerOpen = canUserEdit && (isNewPanel || !!editRow);
 
   // Estilo compacto: mismo alto para inputs y selects
@@ -616,7 +625,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
       {/* Formulario */}
       {isDrawerOpen ? (
         <>
-          <Link href="/contabilidad" className="drawer-backdrop" aria-label="Cerrar panel" />
+          <Link href={listHref} className="drawer-backdrop" aria-label="Cerrar panel" />
           <div
         id="form"
         className="side-drawer"
@@ -643,6 +652,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
             action={upsertAsiento} 
             style={{ display: "grid", gap: 10 }}>
             <input type="hidden" name="club_id" value={clubId} />
+            <input type="hidden" name="redirect_to" value={listHref} />
             <input
               type="hidden"
               name="id_contabilidad"
@@ -881,18 +891,15 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
                 className="icon-button tooltip-button"
                 aria-label={editRow ? "Guardar cambios" : "Crear asiento"}
               >
-                <Icon name={editRow ? "edit" : "new"} />
+                <Icon name="save" />
               </button>
               {editRow && (
                 <a
-                  href={
-                    exportParams.toString()
-                      ? `/contabilidad?${exportParams.toString()}`
-                      : "/contabilidad"
-                  }
-                  style={{ opacity: 0.8 }}
+                  href={listHref}
+                  className="icon-button icon-button-secondary tooltip-button"
+                  aria-label="Cancelar edición"
                 >
-                  Cancelar edición
+                  <Icon name="logout" />
                 </a>
               )}
             </div>
@@ -977,7 +984,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
           <form action={deleteContabilidadWithDocsAction}>
             <input type="hidden" name="club_id" value={clubId} />
             <input type="hidden" name="id_contabilidad" value={editRow.id_contabilidad} />
-            <input type="hidden" name="redirect_to" value="/contabilidad" />
+            <input type="hidden" name="redirect_to" value={listHref} />
             <ConfirmSubmitButton
               message="Se eliminara el asiento y todos sus documentos. Continuar?"
               className="icon-button icon-button-danger tooltip-button"

@@ -41,8 +41,9 @@ async function upsertConcepto(formData: FormData) {
         .eq("id_concepto", Number(id))
     : await supabase.from("conceptos").insert({ concepto });
 
+  const redirectTo = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/conceptos";
   if (error) redirect("/configuracion/conceptos?error=" + encodeURIComponent(error.message));
-  redirect("/configuracion/conceptos");
+  redirect(redirectTo);
 }
 
 async function deleteConcepto(formData: FormData) {
@@ -67,8 +68,9 @@ async function deleteConcepto(formData: FormData) {
     .delete()
     .eq("id_concepto", id);
 
+  const redirectTo = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/conceptos";
   if (error) redirect("/configuracion/conceptos?error=" + encodeURIComponent(error.message));
-  redirect("/configuracion/conceptos");
+  redirect(redirectTo);
 }
 
 export default async function ConceptosPage({
@@ -86,6 +88,7 @@ export default async function ConceptosPage({
   const editId = sp.edit ? Number(sp.edit) : null;
   const isNewPanel = sp.panel === "new";
   const conceptoFilter = String(sp.concepto ?? "").trim();
+  const listHref = buildFilterHref("/configuracion/conceptos", { concepto: conceptoFilter }, []);
 
   const supabase = await createSupabaseServerClient();
   const user = await getCurrentUser();
@@ -188,7 +191,7 @@ export default async function ConceptosPage({
       {/* Panel lateral edición */}
       {isDrawerOpen ? (
         <>
-          <Link href="/configuracion/conceptos" className="drawer-backdrop" aria-label="Cerrar panel" />
+          <Link href={listHref} className="drawer-backdrop" aria-label="Cerrar panel" />
           <div id="form" className="side-drawer">
             <div className="side-drawer-header">
               <div className="side-drawer-title">
@@ -196,11 +199,11 @@ export default async function ConceptosPage({
                 <h2>{editRow ? "Editar concepto" : "Nuevo concepto"}</h2>
               </div>
               <Link
-                href="/configuracion/conceptos"
+                href={listHref}
                 className="icon-button icon-button-secondary tooltip-button"
                 aria-label="Cerrar"
               >
-                ×
+                <Icon name="logout" />
               </Link>
             </div>
 
@@ -216,6 +219,7 @@ export default async function ConceptosPage({
                 className="side-drawer-body"
               >
                 <input type="hidden" name="id_concepto" value={editRow?.id_concepto ?? ""} />
+                <input type="hidden" name="redirect_to" value={listHref} />
 
                 <label>
                   Concepto
@@ -255,6 +259,7 @@ export default async function ConceptosPage({
                 {editRow && (
                   <form action={deleteConcepto}>
                     <input type="hidden" name="id_concepto" value={editRow.id_concepto} />
+                    <input type="hidden" name="redirect_to" value={listHref} />
                     <ConfirmSubmitButton
                       message="¿Eliminar definitivamente este concepto? Si está usado en contabilidad, dará error."
                       className="icon-button icon-button-danger tooltip-button"

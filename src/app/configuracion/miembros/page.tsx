@@ -264,8 +264,8 @@ export default async function MiembrosPage({
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
                 {editMember ? "Editar miembro" : "Añadir miembro"}
               </h2>
-              <Link href="/configuracion/miembros" style={{ fontSize: 13, opacity: 0.6 }} aria-label="Cerrar panel">
-                ✕
+              <Link href="/configuracion/miembros" className="icon-button icon-button-secondary tooltip-button" aria-label="Cerrar panel">
+                <Icon name="logout" />
               </Link>
             </div>
 
@@ -285,8 +285,8 @@ export default async function MiembrosPage({
                       ))}
                     </select>
                   </label>
-                  <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
-                    Guardar cambios
+                  <button type="submit" className="icon-button tooltip-button" aria-label="Guardar cambios">
+                    <Icon name="save" />
                   </button>
                 </form>
               </>

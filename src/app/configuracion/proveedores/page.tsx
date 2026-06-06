@@ -86,8 +86,9 @@ async function upsertProveedor(formData: FormData) {
         .eq("id_proveedor", Number(id))
     : await supabase.from("proveedores").insert(payload);
 
+  const redirectTo = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/proveedores";
   if (error) redirect("/configuracion/proveedores?error=" + encodeURIComponent(error.message));
-  redirect("/configuracion/proveedores");
+  redirect(redirectTo);
 }
 
 async function darDeBajaProveedor(formData: FormData) {
@@ -112,8 +113,9 @@ async function darDeBajaProveedor(formData: FormData) {
     .eq("club_id", clubId)
     .eq("id_proveedor", id);
 
+  const redirectToBaja = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/proveedores";
   if (error) redirect("/configuracion/proveedores?error=" + encodeURIComponent(error.message));
-  redirect("/configuracion/proveedores");
+  redirect(redirectToBaja);
 }
 
 async function reactivarProveedor(formData: FormData) {
@@ -138,8 +140,9 @@ async function reactivarProveedor(formData: FormData) {
     .eq("club_id", clubId)
     .eq("id_proveedor", id);
 
+  const redirectToReactivar = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/proveedores?incluir_bajas=1";
   if (error) redirect("/configuracion/proveedores?error=" + encodeURIComponent(error.message));
-  redirect("/configuracion/proveedores?incluir_bajas=1");
+  redirect(redirectToReactivar);
 }
 
 async function deleteProveedor(formData: FormData) {
@@ -168,8 +171,9 @@ async function deleteProveedor(formData: FormData) {
     .eq("club_id", clubId)
     .eq("id_proveedor", id);
 
+  const redirectToDelete = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/proveedores";
   if (error) redirect("/configuracion/proveedores?error=" + encodeURIComponent(error.message));
-  redirect("/configuracion/proveedores");
+  redirect(redirectToDelete);
 }
 
 export default async function ProveedoresPage({
@@ -197,6 +201,12 @@ export default async function ProveedoresPage({
     ? sp.sort
     : "proveedor") as ProveedoresSortKey;
   const sortDirection: SortDirection = sp.dir === "desc" ? "desc" : "asc";
+  const listHref = buildFilterHref("/configuracion/proveedores", {
+    proveedor: proveedorFilter,
+    incluir_bajas: incluirBajas ? "1" : null,
+    sort: sortKey !== "proveedor" ? sortKey : null,
+    dir: sortDirection !== "asc" ? sortDirection : null,
+  }, []);
 
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -378,7 +388,7 @@ export default async function ProveedoresPage({
       {/* Panel lateral edición */}
       {isDrawerOpen ? (
         <>
-          <Link href="/configuracion/proveedores" className="drawer-backdrop" aria-label="Cerrar panel" />
+          <Link href={listHref} className="drawer-backdrop" aria-label="Cerrar panel" />
           <div
             id="form"
             className="side-drawer"
@@ -394,11 +404,11 @@ export default async function ProveedoresPage({
                 )}
               </div>
               <Link
-                href="/configuracion/proveedores"
+                href={listHref}
                 className="icon-button icon-button-secondary tooltip-button"
                 aria-label="Cerrar"
               >
-                ×
+                <Icon name="logout" />
               </Link>
             </div>
 
@@ -415,6 +425,7 @@ export default async function ProveedoresPage({
               >
                 <input type="hidden" name="club_id" value={clubId} />
                 <input type="hidden" name="id_proveedor" value={editRow?.id_proveedor ?? ""} />
+                <input type="hidden" name="redirect_to" value={listHref} />
 
                 <label>
                   Proveedor (nombre)
@@ -478,6 +489,7 @@ export default async function ProveedoresPage({
                     <form action={darDeBajaProveedor}>
                       <input type="hidden" name="club_id" value={clubId} />
                       <input type="hidden" name="id_proveedor" value={editRow.id_proveedor} />
+                      <input type="hidden" name="redirect_to" value={listHref} />
                       <ConfirmSubmitButton
                         message="¿Dar de baja este proveedor? Dejará de aparecer en los controles, pero se conservará en el historial contable."
                         style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 14px", height: 36, borderRadius: 6, border: "1px solid #f0c070", background: "#fffbea", color: "#92580a", fontSize: 13, fontWeight: 700, cursor: "pointer", minHeight: 36 }}
@@ -489,6 +501,7 @@ export default async function ProveedoresPage({
                     <form action={reactivarProveedor}>
                       <input type="hidden" name="club_id" value={clubId} />
                       <input type="hidden" name="id_proveedor" value={editRow.id_proveedor} />
+                      <input type="hidden" name="redirect_to" value={listHref} />
                       <button type="submit" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0 14px", height: 36, borderRadius: 6, border: "1px solid #a7d9b0", background: "#f0faf2", color: "#1a6b2e", fontSize: 13, fontWeight: 700, cursor: "pointer", minHeight: 36 }}>
                         Reactivar proveedor
                       </button>
@@ -501,6 +514,7 @@ export default async function ProveedoresPage({
                   <form action={deleteProveedor}>
                     <input type="hidden" name="club_id" value={clubId} />
                     <input type="hidden" name="id_proveedor" value={editRow.id_proveedor} />
+                    <input type="hidden" name="redirect_to" value={listHref} />
                     <ConfirmSubmitButton
                       message="¿Eliminar definitivamente este proveedor? Si está usado en contabilidad, dará error."
                       className="icon-button icon-button-danger tooltip-button"

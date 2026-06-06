@@ -398,7 +398,7 @@ export default async function ProgramasPage({
                   <span style={{ color: "#b93a48", fontSize: 12, fontWeight: 750 }}>● DADO DE BAJA</span>
                 )}
               </div>
-              <Link href={listHref} className="icon-button icon-button-secondary tooltip-button" aria-label="Cerrar">×</Link>
+              <Link href={listHref} className="icon-button icon-button-secondary tooltip-button" aria-label="Cerrar"><Icon name="logout" /></Link>
             </div>
 
             <form

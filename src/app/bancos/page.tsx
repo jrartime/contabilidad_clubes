@@ -686,14 +686,14 @@ export default async function BancosPage({
                 className="icon-button tooltip-button"
                 aria-label={editRow ? "Guardar cambios" : "Crear movimiento"}
               >
-                <Icon name={editRow ? "edit" : "new"} />
+                <Icon name="save" />
               </button>
               <a
                 href={listHref}
                 className="icon-button icon-button-secondary tooltip-button"
                 aria-label="Cancelar"
               >
-                ×
+                <Icon name="logout" />
               </a>
             </div>
           </form>
