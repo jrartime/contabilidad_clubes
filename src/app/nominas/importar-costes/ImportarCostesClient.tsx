@@ -239,8 +239,18 @@ export default function ImportarCostesClient({
               </p>
               <label
                 htmlFor="costes-file-input"
-                className="icon-button"
-                style={{ padding: "10px 28px", fontSize: 14, cursor: "pointer", display: "inline-block" }}
+                style={{
+                  display: "inline-block",
+                  padding: "10px 28px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  borderRadius: 6,
+                  background: "var(--primary)",
+                  color: "#fff",
+                  boxShadow: "var(--shadow)",
+                  userSelect: "none",
+                }}
               >
                 📂 Elegir archivo…
                 <input
