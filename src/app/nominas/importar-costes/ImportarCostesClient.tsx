@@ -86,6 +86,7 @@ export default function ImportarCostesClient({
   const [parseError, setParseError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedCostesRow[]>([]);
   const [nameMap, setNameMap] = useState<Record<string, number | "">>({});
 
@@ -100,6 +101,7 @@ export default function ImportarCostesClient({
     const file = e.target.files?.[0];
     if (!file) return;
     setParseError(null);
+    setSelectedFileName(file.name);
 
     const fd = new FormData();
     fd.append("file", file);
@@ -235,24 +237,30 @@ export default function ImportarCostesClient({
               <p style={{ margin: "0 0 16px", fontWeight: 600, fontSize: 15 }}>
                 Selecciona el archivo Excel
               </p>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".xls,.xlsx"
-                style={{ display: "none" }}
-                onChange={handleFileChange}
-              />
-              <button
-                type="button"
+              <label
+                htmlFor="costes-file-input"
                 className="icon-button"
-                style={{ padding: "10px 28px", fontSize: 14 }}
-                onClick={() => fileRef.current?.click()}
+                style={{ padding: "10px 28px", fontSize: 14, cursor: "pointer", display: "inline-block" }}
               >
                 📂 Elegir archivo…
-              </button>
+                <input
+                  ref={fileRef}
+                  id="costes-file-input"
+                  type="file"
+                  accept=".xls,.xlsx"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+              </label>
             </>
           )}
         </div>
+
+        {selectedFileName && !isParsing && (
+          <p style={{ marginTop: 10, fontSize: 13, color: "#475569", textAlign: "center" }}>
+            📄 {selectedFileName}
+          </p>
+        )}
 
         {parseError && (
           <div style={{ ...errorBox, marginTop: 12 }}>⚠ {parseError}</div>
@@ -344,7 +352,7 @@ export default function ImportarCostesClient({
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <button type="button" onClick={() => { setParsedRows([]); setNameMap({}); setStep("upload"); }} style={{ padding: "8px 16px", cursor: "pointer" }}>
+          <button type="button" onClick={() => { setParsedRows([]); setNameMap({}); setSelectedFileName(null); setStep("upload"); }} style={{ padding: "8px 16px", cursor: "pointer" }}>
             ← Cambiar archivo
           </button>
           <button
