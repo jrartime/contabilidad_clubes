@@ -246,19 +246,13 @@ export default function ImportarCostesClient({
     }
     setImportError(null);
     startTransition(async () => {
-      try {
-        await importarNominasCostesAction(rows);
-        // Hard navigation: ensures the nominas page re-fetches fresh data from the server
-        window.location.href = "/nominas";
-      } catch (e: any) {
-        const msg = e?.message ?? String(e);
-        // Ignore Next.js internal redirect (shouldn't happen here, but just in case)
-        if (msg.includes("NEXT_REDIRECT")) {
-          window.location.href = "/nominas";
-          return;
-        }
-        setImportError(msg);
+      const result = await importarNominasCostesAction(rows);
+      if (!result.ok) {
+        setImportError(result.error);
+        return;
       }
+      // Hard navigation ensures the nominas page re-fetches data from the server
+      window.location.href = "/nominas";
     });
   }
 
@@ -541,7 +535,17 @@ export default function ImportarCostesClient({
       </div>
 
       {importError && (
-        <p style={{ color: "red", fontSize: 13 }}>⚠ {importError}</p>
+        <div style={{
+          background: "#fff0f0",
+          border: "2px solid #f87171",
+          borderRadius: 8,
+          padding: "12px 16px",
+          fontSize: 13,
+          color: "#b91c1c",
+          fontWeight: 600,
+        }}>
+          ⚠ Error al importar: {importError}
+        </div>
       )}
 
       {/* Preview table */}

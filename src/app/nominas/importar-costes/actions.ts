@@ -13,20 +13,22 @@ export type CostesRow = {
   fecha: string; // YYYY-MM-DD
   bruto: number;
   coste_empresarial: number;
-  // calculated
   ss: number;
   bruto_imputado: number;
   ss_imputado: number;
   importe_total: number;
   importe_imputado: number;
-  // optional
   programa_id?: number | null;
   categoria_id?: number | null;
   concepto_id?: number | null;
   entidad_id?: number | null;
 };
 
-export async function importarNominasCostesAction(rows: CostesRow[]) {
+type ActionResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string };
+
+export async function importarNominasCostesAction(rows: CostesRow[]): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) redirect("/login");
@@ -37,7 +39,7 @@ export async function importarNominasCostesAction(rows: CostesRow[]) {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  if (!rows.length) throw new Error("No hay filas para importar");
+  if (!rows.length) return { ok: false, error: "No hay filas para importar" };
 
   const payload = rows.map((r) => ({
     club_id: clubId,
@@ -58,7 +60,12 @@ export async function importarNominasCostesAction(rows: CostesRow[]) {
   }));
 
   const { error } = await supabase.from("contabilidad").insert(payload);
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    console.error("[importarNominasCostes] insert error:", error.code, error.message, error.details);
+    return { ok: false, error: `${error.message}${error.details ? ` (${error.details})` : ""}` };
+  }
 
   revalidatePath("/nominas");
+  return { ok: true, count: payload.length };
 }
