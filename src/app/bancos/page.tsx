@@ -817,24 +817,18 @@ export default async function BancosPage({
         </label>
         <label className="filter-field">
           <span>Programa</span>
-          <div className="filter-control-row">
-            <select name="programa_id" defaultValue={filterValue ?? ""}>
-              <option value="">Todos</option>
-              <option value="none">(sin programa)</option>
-              {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
-            </select>
-            <Link href={buildFilterHref("/bancos", bancoFilterParams, ["programa_id"])} className="filter-reset-button" aria-label="Limpiar programa">X</Link>
-          </div>
+          <select name="programa_id" defaultValue={filterValue ?? ""}>
+            <option value="">Todos</option>
+            <option value="none">(sin programa)</option>
+            {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
+          </select>
         </label>
         <label className="filter-field">
           <span>Concepto</span>
-          <div className="filter-control-row">
-            <select name="concepto_id" defaultValue={hasConceptoFilter ? String(conceptoFilterId) : ""}>
-              <option value="">Todos</option>
-              {(conceptos ?? []).map((c: any) => <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>)}
-            </select>
-            <Link href={buildFilterHref("/bancos", bancoFilterParams, ["concepto_id"])} className="filter-reset-button" aria-label="Limpiar concepto">X</Link>
-          </div>
+          <select name="concepto_id" defaultValue={hasConceptoFilter ? String(conceptoFilterId) : ""}>
+            <option value="">Todos</option>
+            {(conceptos ?? []).map((c: any) => <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>)}
+          </select>
         </label>
       </AutoSubmitFilters>
 

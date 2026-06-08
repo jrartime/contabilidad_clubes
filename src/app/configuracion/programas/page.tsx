@@ -322,21 +322,14 @@ export default async function ProgramasPage({
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "12px 0 16px" }}>
           <label className="filter-field">
             <span>Año</span>
-            <div className="filter-control-row">
-              <select name="anio" defaultValue={anioFilter}>
-                <option value="">Todos</option>
-                {Array.from(
-                  new Set((programasForFilter ?? []).map((p: any) => p.anio).filter(Boolean))
-                ).map((anio) => (
-                  <option key={String(anio)} value={String(anio)}>{String(anio)}</option>
-                ))}
-              </select>
-              <Link
-                href={buildFilterHref("/configuracion/programas", { programa: programaFilter, sort: sortKey, dir: sortDirection, incluir_bajas: incluirBajas ? "1" : null }, ["anio"])}
-                className="filter-reset-button"
-                aria-label="Limpiar año"
-              >X</Link>
-            </div>
+            <select name="anio" defaultValue={anioFilter}>
+              <option value="">Todos</option>
+              {Array.from(
+                new Set((programasForFilter ?? []).map((p: any) => p.anio).filter(Boolean))
+              ).map((anio) => (
+                <option key={String(anio)} value={String(anio)}>{String(anio)}</option>
+              ))}
+            </select>
           </label>
 
           <label className="filter-field" style={{ flex: "1 1 180px" }}>

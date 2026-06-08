@@ -689,14 +689,24 @@ export default async function NominasPage({
       <div className="page-toolbar" style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Nóminas</h1>
         {canUserEdit ? (
-          <Link
-            href={`${buildFilterHref("/nominas", { ...nominaFilterParams, panel: "new" }, [])}#form`}
-            className="icon-button tooltip-button"
-            aria-label="Nueva nomina"
-            style={{ marginLeft: "auto" }}
-          >
-            <Icon name="new" />
-          </Link>
+          <>
+            <Link
+              href="/nominas/importar-costes"
+              className="icon-button icon-button-secondary tooltip-button"
+              aria-label="Importar costes laborales desde Excel"
+              title="Importar costes laborales desde Excel"
+              style={{ marginLeft: "auto" }}
+            >
+              <Icon name="upload" />
+            </Link>
+            <Link
+              href={`${buildFilterHref("/nominas", { ...nominaFilterParams, panel: "new" }, [])}#form`}
+              className="icon-button tooltip-button"
+              aria-label="Nueva nomina"
+            >
+              <Icon name="new" />
+            </Link>
+          </>
         ) : null}
 </div>
 {errorMsg && (
@@ -855,34 +865,25 @@ export default async function NominasPage({
         </label>
         <label className="filter-field">
           <span>Personal</span>
-          <div className="filter-control-row">
-            <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
-              <option value="">Todos</option>
-              {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
-            </select>
-            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["personal_id"])} className="filter-reset-button" aria-label="Limpiar personal">X</Link>
-          </div>
+          <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
+            <option value="">Todos</option>
+            {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
+          </select>
         </label>
         <label className="filter-field">
           <span>Programa</span>
-          <div className="filter-control-row">
-            <select name="programa_id" defaultValue={hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : ""}>
-              <option value="">Todos</option>
-              <option value="none">(sin programa)</option>
-              {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.programa}</option>)}
-            </select>
-            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["programa_id"])} className="filter-reset-button" aria-label="Limpiar programa">X</Link>
-          </div>
+          <select name="programa_id" defaultValue={hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : ""}>
+            <option value="">Todos</option>
+            <option value="none">(sin programa)</option>
+            {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.programa}</option>)}
+          </select>
         </label>
         <label className="filter-field">
           <span>Categoría</span>
-          <div className="filter-control-row">
-            <select name="categoria_id" defaultValue={hasCategoriaFilter ? String(categoriaFilterId) : ""}>
-              <option value="">Todas</option>
-              {(categorias ?? []).map((c: any) => <option key={c.id_categoria} value={c.id_categoria}>{c.categoria}</option>)}
-            </select>
-            <Link href={buildFilterHref("/nominas", nominaFilterParams, ["categoria_id"])} className="filter-reset-button" aria-label="Limpiar categoria">X</Link>
-          </div>
+          <select name="categoria_id" defaultValue={hasCategoriaFilter ? String(categoriaFilterId) : ""}>
+            <option value="">Todas</option>
+            {(categorias ?? []).map((c: any) => <option key={c.id_categoria} value={c.id_categoria}>{c.categoria}</option>)}
+          </select>
         </label>
       </AutoSubmitFilters>
 

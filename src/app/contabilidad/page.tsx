@@ -61,8 +61,6 @@ async function upsertAsiento(formData: FormData) {
   const id = String(formData.get("id_contabilidad") ?? "").trim();
   const programaFilter = parseProgramaFilterValue(formData.get("programa_id_filter"));
   const proveedorFilterId = toNullableBigint(formData.get("proveedor_id_filter"));
-  const limitValue = String(formData.get("limit") ?? "").trim();
-
   const tipo_id = toNullableBigint(formData.get("tipo_id"));
   const proveedor_id = toNullableBigint(formData.get("proveedor_id"));
   const concepto_id = toNullableBigint(formData.get("concepto_id"));
@@ -128,7 +126,6 @@ async function upsertAsiento(formData: FormData) {
     if (programaFilter.isNone) redirectParams.set("programa_id", "none");
     if (programaFilter.id) redirectParams.set("programa_id", String(programaFilter.id));
     if (proveedorFilterId) redirectParams.set("proveedor_id", String(proveedorFilterId));
-    if (limitValue) redirectParams.set("limit", limitValue);
     redirect(`/contabilidad?${redirectParams.toString()}&error=${encodeURIComponent(error.message)}`);
   }
 
@@ -138,7 +135,6 @@ async function upsertAsiento(formData: FormData) {
   if (programaFilter.isNone) redirectParams.set("programa_id", "none");
   if (programaFilter.id) redirectParams.set("programa_id", String(programaFilter.id));
   if (proveedorFilterId) redirectParams.set("proveedor_id", String(proveedorFilterId));
-  if (limitValue) redirectParams.set("limit", limitValue);
   redirect(
     redirectParams.toString()
       ? `/contabilidad?${redirectParams.toString()}`
@@ -154,7 +150,7 @@ async function duplicateAsiento(formData: FormData) {
   const id = Number(formData.get("id_contabilidad"));
   const programaFilter = parseProgramaFilterValue(formData.get("programa_id_filter"));
   const proveedorFilterId = toNullableBigint(formData.get("proveedor_id_filter"));
-  const limitValue = String(formData.get("limit") ?? "").trim();
+  const redirectTo = String(formData.get("redirect_to") ?? "").trim();
 
   if (!clubId || !Number.isFinite(clubId))
     redirect("/contabilidad?error=club_id%20inv%C3%A1lido");
@@ -168,11 +164,16 @@ async function duplicateAsiento(formData: FormData) {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  const redirectParams = new URLSearchParams();
-  if (programaFilter.isNone) redirectParams.set("programa_id", "none");
-  if (programaFilter.id) redirectParams.set("programa_id", String(programaFilter.id));
-  if (proveedorFilterId) redirectParams.set("proveedor_id", String(proveedorFilterId));
-  if (limitValue) redirectParams.set("limit", limitValue);
+  // Build base redirect params (from redirect_to or fallback filter inputs)
+  const redirectParams = redirectTo
+    ? new URLSearchParams(redirectTo.includes("?") ? redirectTo.split("?")[1] : "")
+    : (() => {
+        const p = new URLSearchParams();
+        if (programaFilter.isNone) p.set("programa_id", "none");
+        if (programaFilter.id) p.set("programa_id", String(programaFilter.id));
+        if (proveedorFilterId) p.set("proveedor_id", String(proveedorFilterId));
+        return p;
+      })();
 
   // Leer el asiento original
   const { data: original, error: readErr } = await supabase
@@ -248,7 +249,7 @@ export default async function ContabilidadPage({
     tipo_id?: string;
     fecha_desde?: string;
     fecha_hasta?: string;
-    limit?: string;
+    page?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -283,12 +284,10 @@ export default async function ContabilidadPage({
   const hasTipoFilter = !!tipoFilterId && Number.isFinite(tipoFilterId);
   const fechaDesde = String(sp.fecha_desde ?? "").trim();
   const fechaHasta = String(sp.fecha_hasta ?? "").trim();
-  const limitRaw = String(sp.limit ?? "").trim();
-  const limitParsed = Number(limitRaw);
-  const limit = Number.isFinite(limitParsed)
-    ? Math.max(50, Math.min(2000, Math.trunc(limitParsed)))
-    : 500;
-  const limitValue = limitRaw ? String(limit) : null;
+  const PAGE_SIZE = 50;
+  const pageRaw = Number(sp.page ?? 1);
+  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.trunc(pageRaw) : 1;
+  const offset = (page - 1) * PAGE_SIZE;
   const programaFilterValue = hasProgramaFilter
     ? isProgramaNoneFilter
       ? "none"
@@ -325,6 +324,29 @@ export default async function ContabilidadPage({
     .order("programa", { ascending: true });
 
   const activeProgramIds = (programas ?? []).map((p: any) => Number(p.id_programa));
+
+  // Query de totales: mismos filtros que la principal, sin limit, solo campos necesarios
+  let totalsQ = supabase
+    .from("contabilidad")
+    .select("importe_total, importe_imputado, categoria_id")
+    .eq("club_id", clubId);
+  if (hasProgramaFilter) {
+    totalsQ = isProgramaNoneFilter
+      ? totalsQ.is("programa_id", null)
+      : totalsQ.eq("programa_id", programaFilterId);
+  } else {
+    if (activeProgramIds.length > 0) {
+      totalsQ = totalsQ.or(`programa_id.is.null,programa_id.in.(${activeProgramIds.join(",")})`);
+    } else {
+      totalsQ = totalsQ.is("programa_id", null);
+    }
+  }
+  if (hasProveedorFilter) totalsQ = totalsQ.eq("proveedor_id", proveedorFilterId);
+  if (hasPersonalFilter) totalsQ = totalsQ.eq("personal_id", personalFilterId);
+  if (hasTipoFilter) totalsQ = totalsQ.eq("tipo_id", tipoFilterId);
+  if (fechaDesde) totalsQ = totalsQ.gte("fecha", fechaDesde);
+  if (fechaHasta) totalsQ = totalsQ.lte("fecha", fechaHasta);
+  const totalsPromise = totalsQ;
 
   // Cargas en paralelo para reducir latencia en el dashboard
   const tiposPromise = supabase
@@ -409,7 +431,7 @@ export default async function ContabilidadPage({
   const contabilidadPromise = q
     .order("fecha", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(offset, offset + PAGE_SIZE - 1);
 
   // Ingresos de banco para el programa seleccionado (solo cuando hay filtro de programa concreto)
   const bancosIngresosPromise =
@@ -430,6 +452,7 @@ export default async function ContabilidadPage({
     { data: categorias },
     { data: rows, error },
     { data: bancosIngresosData },
+    { data: totalsRows },
   ] = await Promise.all([
     tiposPromise,
     proveedoresPromise,
@@ -439,6 +462,7 @@ export default async function ContabilidadPage({
     categoriasPromise,
     contabilidadPromise,
     bancosIngresosPromise,
+    totalsPromise,
   ]);
 
 type Tot = { total: number; imputado: number; count: number };
@@ -447,7 +471,7 @@ const categoriasMap = new Map(
   (categorias ?? []).map((c: any) => [Number(c.id_categoria), String(c.categoria ?? "")])
 );
 
-const totales = (rows ?? []).reduce(
+const totales = (totalsRows ?? []).reduce(
   (acc, r: any) => {
     const total = Number(r.importe_total ?? 0) || 0;
     const imputado = Number(r.importe_imputado ?? 0) || 0;
@@ -481,6 +505,9 @@ const totales = (rows ?? []).reduce(
     otras: { total: 0, imputado: 0, count: 0 } as Tot,
   }
 );
+
+const totalCount = totalsRows?.length ?? 0;
+const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
 // ===============================
 // Control de subvención del programa seleccionado
@@ -672,10 +699,6 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
                 value={proveedorFilterValue}
               />
             ) : null}
-            {limitValue ? (
-              <input type="hidden" name="limit" value={limitValue} />
-            ) : null}
-
             <div
               className="conta-form-row-one"
               style={{
@@ -1001,7 +1024,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
       ) : null}
 
       <AutoSubmitFilters action="/contabilidad" className="filters-grid contabilidad-filters">
-        {limitValue ? <input type="hidden" name="limit" value={limitValue} /> : null}
+
         <label className="filter-field filter-field-date">
           <span>Desde</span>
           <div className="filter-control-row">
@@ -1018,44 +1041,32 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         </label>
         <label className="filter-field">
           <span>Tipo</span>
-          <div className="filter-control-row">
-            <select name="tipo_id" defaultValue={hasTipoFilter ? String(tipoFilterId) : ""}>
-              <option value="">Todos</option>
-              {(tipos ?? []).map((t: any) => <option key={t.id_tipo} value={t.id_tipo}>{t.tipo}</option>)}
-            </select>
-            <Link href={buildFilterHref("/contabilidad", exportParams, ["tipo_id"])} className="filter-reset-button" aria-label="Limpiar tipo">X</Link>
-          </div>
+          <select name="tipo_id" defaultValue={hasTipoFilter ? String(tipoFilterId) : ""}>
+            <option value="">Todos</option>
+            {(tipos ?? []).map((t: any) => <option key={t.id_tipo} value={t.id_tipo}>{t.tipo}</option>)}
+          </select>
         </label>
         <label className="filter-field">
           <span>Proveedor</span>
-          <div className="filter-control-row">
-            <select name="proveedor_id" defaultValue={hasProveedorFilter ? String(proveedorFilterId) : ""}>
-              <option value="">Todos</option>
-              {(proveedores ?? []).map((p: any) => <option key={p.id_proveedor} value={p.id_proveedor}>{p.proveedor}</option>)}
-            </select>
-            <Link href={buildFilterHref("/contabilidad", exportParams, ["proveedor_id"])} className="filter-reset-button" aria-label="Limpiar proveedor">X</Link>
-          </div>
+          <select name="proveedor_id" defaultValue={hasProveedorFilter ? String(proveedorFilterId) : ""}>
+            <option value="">Todos</option>
+            {(proveedores ?? []).map((p: any) => <option key={p.id_proveedor} value={p.id_proveedor}>{p.proveedor}</option>)}
+          </select>
         </label>
         <label className="filter-field">
           <span>Personal</span>
-          <div className="filter-control-row">
-            <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
-              <option value="">Todos</option>
-              {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
-            </select>
-            <Link href={buildFilterHref("/contabilidad", exportParams, ["personal_id"])} className="filter-reset-button" aria-label="Limpiar personal">X</Link>
-          </div>
+          <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
+            <option value="">Todos</option>
+            {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
+          </select>
         </label>
         <label className="filter-field">
           <span>Programa</span>
-          <div className="filter-control-row">
-            <select name="programa_id" defaultValue={programaFilterValue ?? ""}>
-              <option value="">Todos</option>
-              <option value="none">(sin programa)</option>
-              {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
-            </select>
-            <Link href={buildFilterHref("/contabilidad", exportParams, ["programa_id"])} className="filter-reset-button" aria-label="Limpiar programa">X</Link>
-          </div>
+          <select name="programa_id" defaultValue={programaFilterValue ?? ""}>
+            <option value="">Todos</option>
+            <option value="none">(sin programa)</option>
+            {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
+          </select>
         </label>
       </AutoSubmitFilters>
 
@@ -1068,7 +1079,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         >
           {/* mantenemos edit si existiera, aunque normalmente no filtras mientras editas */}
           {editId ? <input type="hidden" name="edit" value={String(editId)} /> : null}
-          {limitValue ? <input type="hidden" name="limit" value={limitValue} /> : null}
+  
 
           <label className="conta-filter-label">
             Filtrar por programa
@@ -1110,22 +1121,6 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
               ))}
             </select>
           </label>
-          <label className="conta-filter-label">
-            Limite
-            <select
-              name="limit"
-              defaultValue={limitValue ?? String(limit)}
-              className="conta-filter-select"
-              style={{ display: "block", padding: 8, minWidth: 140 }}
-            >
-              {[200, 500, 1000, 2000].map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </label>
-
           <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
             Aplicar filtro
           </button>
@@ -1301,9 +1296,48 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         clubId={clubId}
         programaFilterValue={programaFilterValue}
         proveedorFilterValue={proveedorFilterValue}
-        limitValue={limitValue}
+        page={page}
+        totalPages={totalPages}
+        exportParamsStr={exportParams.toString()}
         duplicateAsientoAction={duplicateAsiento}
       />
+
+      {/* Paginación */}
+      {totalCount > 0 && (() => {
+        const mkHref = (p: number) => {
+          const ps = new URLSearchParams(exportParams);
+          if (p > 1) ps.set("page", String(p));
+          else ps.delete("page");
+          return ps.toString() ? `/contabilidad?${ps.toString()}` : "/contabilidad";
+        };
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", padding: "16px 0", flexWrap: "wrap" }}>
+            {page > 1 ? (
+              <Link
+                href={mkHref(page - 1)}
+                style={{ padding: "8px 16px", border: "1px solid #ddd", borderRadius: 6, textDecoration: "none" }}
+              >
+                ← Anterior
+              </Link>
+            ) : (
+              <span style={{ padding: "8px 16px", opacity: 0.4, userSelect: "none" }}>← Anterior</span>
+            )}
+            <span style={{ fontSize: 13, opacity: 0.8 }}>
+              Página {page} de {totalPages} · {totalCount} {totalCount === 1 ? "registro" : "registros"}
+            </span>
+            {page < totalPages ? (
+              <Link
+                href={mkHref(page + 1)}
+                style={{ padding: "8px 16px", border: "1px solid #ddd", borderRadius: 6, textDecoration: "none" }}
+              >
+                Siguiente →
+              </Link>
+            ) : (
+              <span style={{ padding: "8px 16px", opacity: 0.4, userSelect: "none" }}>Siguiente →</span>
+            )}
+          </div>
+        );
+      })()}
 
       <style>{`
         @media (max-width: 1000px) {

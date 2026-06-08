@@ -48,7 +48,8 @@ export default function ContabilidadTable({
   clubId,
   programaFilterValue,
   proveedorFilterValue,
-  limitValue,
+  page,
+  exportParamsStr,
   duplicateAsientoAction,
 }: {
   initialRows: Row[];
@@ -62,7 +63,9 @@ export default function ContabilidadTable({
   clubId: number;
   programaFilterValue: string | null;
   proveedorFilterValue: string | null;
-  limitValue: string | null;
+  page: number;
+  totalPages: number;
+  exportParamsStr: string;
   duplicateAsientoAction: (formData: FormData) => Promise<void>;
 }) {
   const router = useRouter();
@@ -189,7 +192,11 @@ export default function ContabilidadTable({
         {proveedorFilterValue ? (
           <input type="hidden" name="proveedor_id_filter" value={proveedorFilterValue} />
         ) : null}
-        {limitValue ? <input type="hidden" name="limit" value={limitValue} /> : null}
+        <input
+          type="hidden"
+          name="redirect_to"
+          value={exportParamsStr ? `/contabilidad?${exportParamsStr}` : "/contabilidad"}
+        />
       </>
     );
   }
@@ -573,12 +580,12 @@ export default function ContabilidadTable({
 
                     <div className="row-actions" style={{ justifyContent: "flex-end" }}>
                       <Link
-                        href={`/contabilidad?${new URLSearchParams({
-                          ...(programaFilterValue ? { programa_id: programaFilterValue } : {}),
-                          ...(proveedorFilterValue ? { proveedor_id: proveedorFilterValue } : {}),
-                          ...(limitValue ? { limit: limitValue } : {}),
-                          edit: String(r.id_contabilidad),
-                        }).toString()}#form`}
+                        href={(() => {
+                          const ps = new URLSearchParams(exportParamsStr);
+                          if (page > 1) ps.set("page", String(page));
+                          ps.set("edit", String(r.id_contabilidad));
+                          return `/contabilidad?${ps.toString()}#form`;
+                        })()}
                         className="app-action-link"
                         style={{ gap: 6 }}
                         aria-label="Editar asiento"
