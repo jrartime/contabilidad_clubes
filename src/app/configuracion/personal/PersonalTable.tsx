@@ -39,6 +39,14 @@ export default function PersonalTable({
   const [newActivo, setNewActivo] = useState(true);
   const [panelMode, setPanelMode] = useState<"new" | "edit" | null>(initialPanelMode ?? null);
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  // Sync when the URL-driven prop changes (soft navigation doesn't remount client components)
+  React.useEffect(() => {
+    if (initialPanelMode) {
+      setPanelMode(initialPanelMode);
+      setEditingId(null);
+    }
+  }, [initialPanelMode]);
   const [sort, setSort] = useState<SortState>({ key: "nombre", direction: "asc" });
 
   const disabled = !canEdit || isPending;
