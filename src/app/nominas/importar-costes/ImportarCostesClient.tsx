@@ -117,7 +117,6 @@ export default function ImportarCostesClient({
   const [step, setStep] = useState<Step>("upload");
   const [parseError, setParseError] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [importOk, setImportOk] = useState(false);
 
   // ── Parsed rows ──
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
@@ -249,10 +248,16 @@ export default function ImportarCostesClient({
     startTransition(async () => {
       try {
         await importarNominasCostesAction(rows);
-        setImportOk(true);
-        router.push("/nominas");
+        // Hard navigation: ensures the nominas page re-fetches fresh data from the server
+        window.location.href = "/nominas";
       } catch (e: any) {
-        setImportError(e?.message ?? String(e));
+        const msg = e?.message ?? String(e);
+        // Ignore Next.js internal redirect (shouldn't happen here, but just in case)
+        if (msg.includes("NEXT_REDIRECT")) {
+          window.location.href = "/nominas";
+          return;
+        }
+        setImportError(msg);
       }
     });
   }
@@ -294,17 +299,6 @@ export default function ImportarCostesClient({
   // ──────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────
-  if (importOk) {
-    return (
-      <div style={{ padding: 32, textAlign: "center" }}>
-        <p style={{ fontSize: 18, fontWeight: 700, color: "green" }}>
-          ✓ Importación completada
-        </p>
-        <p>Redirigiendo a nóminas…</p>
-      </div>
-    );
-  }
-
   // ── STEP 1: Upload ──────────────────────────────────
   if (step === "upload") {
     return (

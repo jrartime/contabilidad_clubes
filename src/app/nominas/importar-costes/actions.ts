@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 
@@ -58,4 +59,6 @@ export async function importarNominasCostesAction(rows: CostesRow[]) {
 
   const { error } = await supabase.from("contabilidad").insert(payload);
   if (error) throw new Error(error.message);
+
+  revalidatePath("/nominas");
 }
