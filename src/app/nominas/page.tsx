@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { readSheet } from "read-excel-file/browser";
+import * as XLSX from "xlsx";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
@@ -69,6 +69,19 @@ function safeNominaRedirect(value: FormDataEntryValue | null) {
 function appendNominaError(redirectTo: string, error: string) {
   const separator = redirectTo.includes("?") ? "&" : "?";
   return `${redirectTo}${separator}error=${encodeURIComponent(error)}`;
+}
+
+function getPayrollMonthKey(value: unknown) {
+  const text = String(value ?? "").trim();
+  const isoMatch = /^(\d{4})-(\d{2})/.exec(text);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}`;
+  return "sin_fecha";
+}
+
+function getPayrollMonthLabel(key: string) {
+  if (key === "sin_fecha") return "Sin fecha";
+  const [year, month] = key.split("-");
+  return `${month}/${year}`;
 }
 
 function toIsoDateFromExcel(value: unknown): string | null {
@@ -238,14 +251,21 @@ async function importNominasExcel(formData: FormData) {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  const rows = (await readSheet(file)) as unknown[][];
+  const buffer = Buffer.from(await (file as File).arrayBuffer());
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: null,
+    blankrows: false,
+  }) as unknown[][];
+
   const dataRows = rows.filter(hasAnyExcelValue);
   const first = dataRows[0] ?? [];
-  const firstCell = String(first[0] ?? "").trim().toLowerCase();
-  const rowsWithoutHeader =
-    firstCell.includes("personal") || firstCell.includes("empleado")
-      ? dataRows.slice(1)
-      : dataRows;
+  // Si la primera celda no es un número entero (personal_id) → es cabecera, saltarla
+  const firstCellNum = Number(String(first[0] ?? "").trim());
+  const firstIsHeader = !Number.isFinite(firstCellNum) || firstCellNum <= 0;
+  const rowsWithoutHeader = firstIsHeader ? dataRows.slice(1) : dataRows;
 
   const payload = rowsWithoutHeader.map((row) => {
     const bruto = toNullableDecimalFromExcel(row[3]);
@@ -303,6 +323,8 @@ export default async function NominasPage({
     fecha_hasta?: string;
     sort?: string;
     dir?: string;
+    importados?: string;
+    resumen?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -319,8 +341,10 @@ export default async function NominasPage({
   const canUserEdit = canEditClubData(myRole);
 
   const errorMsg = sp.error ? decodeURIComponent(sp.error) : null;
+  const importadosMsg = sp.importados ? Number(sp.importados) : null;
   const editId = sp.edit ? Number(sp.edit) : null;
   const isNewPanel = sp.panel === "new";
+  const showResumenMensual = sp.resumen === "mensual";
 
   const programaFilter = parseProgramaFilterValue(sp.programa_id);
   const personalFilterId = sp.personal_id ? Number(sp.personal_id) : null;
@@ -357,6 +381,10 @@ export default async function NominasPage({
       isProgramaNoneFilter ? "none" : String(programaFilterId)
     );
   }
+  if (hasPersonalFilter) exportParams.set("personal_id", String(personalFilterId));
+  if (hasCategoriaFilter) exportParams.set("categoria_id", String(categoriaFilterId));
+  if (fechaDesde) exportParams.set("fecha_desde", fechaDesde);
+  if (fechaHasta) exportParams.set("fecha_hasta", fechaHasta);
   const exportHref = `/nominas/export${exportParams.toString() ? `?${exportParams.toString()}` : ""}`;
 
   const proveedoresPromise = supabase
@@ -521,6 +549,44 @@ export default async function NominasPage({
       otras: { total: 0, imputado: 0, bruto: 0, coste: 0, count: 0 } as Tot,
     }
   );
+  type MonthlyTot = {
+    key: string;
+    label: string;
+    count: number;
+    bruto: number;
+    coste: number;
+    ss: number;
+    total: number;
+    imputado: number;
+  };
+  const resumenMensualRows = Array.from(
+    rowsAny
+      .reduce((acc: Map<string, MonthlyTot>, r: any) => {
+        const key = getPayrollMonthKey(r.fecha);
+        const current =
+          acc.get(key) ??
+          ({
+            key,
+            label: getPayrollMonthLabel(key),
+            count: 0,
+            bruto: 0,
+            coste: 0,
+            ss: 0,
+            total: 0,
+            imputado: 0,
+          } satisfies MonthlyTot);
+
+        current.count += 1;
+        current.bruto += Number(r.bruto ?? 0) || 0;
+        current.coste += Number(r.coste_empresarial ?? 0) || 0;
+        current.ss += Number(r.ss ?? 0) || 0;
+        current.total += Number(r.importe_total ?? 0) || 0;
+        current.imputado += Number(r.importe_imputado ?? 0) || 0;
+        acc.set(key, current);
+        return acc;
+      }, new Map<string, MonthlyTot>())
+      .values()
+  ).sort((a, b) => b.key.localeCompare(a.key));
 
   // Edit row
   let editRow: any =
@@ -580,7 +646,11 @@ export default async function NominasPage({
     personal_id: hasPersonalFilter ? String(personalFilterId) : "",
     programa_id: hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : "",
     categoria_id: hasCategoriaFilter ? String(categoriaFilterId) : "",
+    resumen: showResumenMensual ? "mensual" : "",
   };
+  const resumenMensualHref = showResumenMensual
+    ? buildFilterHref("/nominas", nominaFilterParams, ["resumen"])
+    : buildFilterHref("/nominas", { ...nominaFilterParams, resumen: "mensual" }, []);
   const listHref = buildFilterHref("/nominas", nominaFilterParams, []);
   const editRedirectParams = new URLSearchParams(
     listHref.split("?")[1] ?? ""
@@ -688,14 +758,23 @@ export default async function NominasPage({
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
       <div className="page-toolbar" style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800 }}>Nóminas</h1>
-        {canUserEdit ? (
-          <>
+        <div className="page-toolbar-actions" style={{ marginLeft: "auto" }}>
+          <Link
+            href={resumenMensualHref}
+            className={showResumenMensual ? "app-action-link app-action-link-secondary" : "app-action-link"}
+          >
+            {showResumenMensual ? "Ocultar resumen" : "Resumen mensual"}
+          </Link>
+          <a href={exportHref} className="app-action-link">
+            Informe PDF
+          </a>
+          {canUserEdit ? (
+            <>
             <Link
               href="/nominas/importar-costes"
               className="icon-button icon-button-secondary tooltip-button"
               aria-label="Importar costes laborales desde Excel"
               title="Importar costes laborales desde Excel"
-              style={{ marginLeft: "auto" }}
             >
               <Icon name="upload" />
             </Link>
@@ -708,8 +787,14 @@ export default async function NominasPage({
             </Link>
           </>
         ) : null}
-</div>
-{errorMsg && (
+        </div>
+      </div>
+{importadosMsg !== null && importadosMsg > 0 && (
+        <div style={{ border: "1px solid #86efac", background: "#f0fdf4", padding: 10, borderRadius: 8, fontWeight: 600, color: "#15803d" }}>
+          ✓ Se importaron {importadosMsg} nóminas correctamente.
+        </div>
+      )}
+      {errorMsg && (
         <div
           style={{
             border: "1px solid #f5c2c2",
@@ -849,6 +934,7 @@ export default async function NominasPage({
 
       {/* Filtro por programa */}
       <AutoSubmitFilters action="/nominas">
+        {showResumenMensual ? <input type="hidden" name="resumen" value="mensual" /> : null}
         <label className="filter-field">
           <span>Desde</span>
           <div className="filter-control-row">
@@ -986,6 +1072,79 @@ export default async function NominasPage({
           </div>
         </div>
       </div>
+
+      {showResumenMensual ? (
+        <div
+          style={{
+            border: "1px solid #ddd",
+            borderRadius: 10,
+            padding: 12,
+            marginTop: 10,
+            display: "grid",
+            gap: 10,
+          }}
+        >
+          <div style={{ fontWeight: 800 }}>Resumen mensual de nominas filtradas</div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
+              <thead>
+                <tr>
+                  {["Mes", "Nominas", "Bruto", "Coste empresarial", "SS", "Total", "Imputado"].map(
+                    (label) => (
+                      <th
+                        key={label}
+                        style={{
+                          textAlign: label === "Mes" ? "left" : "right",
+                          borderBottom: "1px solid #ddd",
+                          padding: 8,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {label}
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {resumenMensualRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: 10, opacity: 0.75 }}>
+                      No hay nominas para los filtros seleccionados.
+                    </td>
+                  </tr>
+                ) : (
+                  resumenMensualRows.map((row) => (
+                    <tr key={row.key}>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, fontWeight: 700 }}>
+                        {row.label}
+                      </td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, textAlign: "right" }}>
+                        {row.count}
+                      </td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, textAlign: "right" }}>
+                        {formatDecimal(row.bruto)}
+                      </td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, textAlign: "right" }}>
+                        {formatDecimal(row.coste)}
+                      </td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, textAlign: "right" }}>
+                        {formatDecimal(row.ss)}
+                      </td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, textAlign: "right" }}>
+                        {formatDecimal(row.total)}
+                      </td>
+                      <td style={{ borderBottom: "1px solid #eee", padding: 8, textAlign: "right" }}>
+                        {formatDecimal(row.imputado)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {/* Listado */}
       <h2 style={{ fontSize: 16, marginTop: 16, marginBottom: 8 }}>
