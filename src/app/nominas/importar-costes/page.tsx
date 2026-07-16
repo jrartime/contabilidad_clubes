@@ -26,6 +26,7 @@ export default async function ImportarCostesPage() {
     { data: conceptos },
     { data: categorias },
     { data: entidades },
+    { data: proveedores },
   ] = await Promise.all([
     supabase
       .from("personal")
@@ -51,12 +52,18 @@ export default async function ImportarCostesPage() {
       .from("entidades")
       .select("id_entidad, entidad")
       .order("entidad", { ascending: true }),
+    supabase
+      .from("proveedores")
+      .select("id_proveedor, proveedor")
+      .eq("club_id", clubId)
+      .eq("activo", true)
+      .order("proveedor", { ascending: true }),
   ]);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <Link href="/nominas" className="icon-button icon-button-secondary" aria-label="Volver a nóminas">
+        <Link href="/nominas" className="icon-button icon-button-secondary" aria-label="Volver a nóminas" title="Volver a nóminas">
           <Icon name="logout" />
         </Link>
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>
@@ -70,6 +77,7 @@ export default async function ImportarCostesPage() {
         conceptos={conceptos ?? []}
         categorias={categorias ?? []}
         entidades={entidades ?? []}
+        proveedores={proveedores ?? []}
       />
     </div>
   );

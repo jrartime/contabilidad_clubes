@@ -70,12 +70,14 @@ export default function ImportarCostesClient({
   conceptos,
   categorias,
   entidades,
+  proveedores,
 }: {
   personal: Personal[];
   programas: { id_programa: number; programa: string; anio?: number | null }[];
   conceptos: { id_concepto: number; concepto: string }[];
   categorias: { id_categoria: number; categoria: string }[];
   entidades: { id_entidad: number; entidad: string }[];
+  proveedores: { id_proveedor: number; proveedor: string }[];
 }) {
   const [isParsing, startParsing] = useTransition();
   const [isImporting, startImporting] = useTransition();
@@ -95,6 +97,7 @@ export default function ImportarCostesClient({
   const [categoriaId, setCategoriaId] = useState<number | "">("");
   const [conceptoId, setConceptoId] = useState<number | "">("");
   const [entidadId, setEntidadId] = useState<number | "">("");
+  const [proveedorId, setProveedorId] = useState<number | "">("");
 
   // ── Step 1: upload & server-side parse ──
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -147,11 +150,14 @@ export default function ImportarCostesClient({
           categoria_id: categoriaId || null,
           concepto_id: conceptoId || null,
           entidad_id: entidadId || null,
+          proveedor_id: proveedorId || null,
         };
       });
   }
 
   // ── Step 3: import ──
+  const [importSuccess, setImportSuccess] = useState<number | null>(null);
+
   function handleImport() {
     const rows = buildFinalRows();
     if (rows.length === 0) {
@@ -165,7 +171,10 @@ export default function ImportarCostesClient({
         setImportError(result.error);
         return;
       }
-      window.location.href = "/nominas";
+      setImportSuccess(result.count);
+      setTimeout(() => {
+        window.location.href = "/nominas?importados=" + result.count;
+      }, 2000);
     });
   }
 
@@ -345,10 +354,11 @@ export default function ImportarCostesClient({
           <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10 }}>Campos opcionales (para todas las filas)</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12 }}>
             {[
-              { label: "Programa", value: programaId, set: setProgramaId, opts: programas.map((p) => ({ id: p.id_programa, label: `${p.anio ? `[${p.anio}] ` : ""}${p.programa}` })) },
-              { label: "Categoría", value: categoriaId, set: setCategoriaId, opts: categorias.map((c) => ({ id: c.id_categoria, label: c.categoria })) },
-              { label: "Concepto",  value: conceptoId,  set: setConceptoId,  opts: conceptos.map((c)  => ({ id: c.id_concepto,  label: c.concepto  })) },
-              { label: "Entidad",   value: entidadId,   set: setEntidadId,   opts: entidades.map((e)  => ({ id: e.id_entidad,   label: e.entidad   })) },
+              { label: "Programa",   value: programaId,   set: setProgramaId,   opts: programas.map((p)   => ({ id: p.id_programa,   label: `${p.anio ? `[${p.anio}] ` : ""}${p.programa}` })) },
+              { label: "Categoría",  value: categoriaId,  set: setCategoriaId,  opts: categorias.map((c)  => ({ id: c.id_categoria,  label: c.categoria  })) },
+              { label: "Concepto",   value: conceptoId,   set: setConceptoId,   opts: conceptos.map((c)   => ({ id: c.id_concepto,   label: c.concepto   })) },
+              { label: "Entidad",    value: entidadId,    set: setEntidadId,    opts: entidades.map((e)   => ({ id: e.id_entidad,    label: e.entidad    })) },
+              { label: "Proveedor",  value: proveedorId,  set: setProveedorId,  opts: proveedores.map((p) => ({ id: p.id_proveedor,  label: p.proveedor  })) },
             ].map(({ label, value, set, opts }) => (
               <label key={label} style={{ display: "grid", gap: 4, fontSize: 13 }}>
                 {label}
@@ -367,8 +377,7 @@ export default function ImportarCostesClient({
           </button>
           <button
             type="button"
-            className="icon-button"
-            style={{ padding: "8px 24px" }}
+            style={{ padding: "8px 24px", cursor: "pointer", background: "var(--primary)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, fontSize: 14, boxShadow: "var(--shadow)", whiteSpace: "nowrap" }}
             onClick={() => setStep("preview")}
           >
             Ver previsualización →
@@ -390,6 +399,11 @@ export default function ImportarCostesClient({
         {skippedCount > 0 && <span style={{ color: "#92400e" }}> (se omiten {skippedCount} filas sin trabajador asignado)</span>}.
       </div>
 
+      {importSuccess !== null && (
+        <div style={{ background: "#f0fdf4", border: "2px solid #4ade80", borderRadius: 8, padding: "12px 16px", fontSize: 14, fontWeight: 700, color: "#15803d" }}>
+          ✓ Se insertaron correctamente {importSuccess} nóminas en la base de datos. Redirigiendo…
+        </div>
+      )}
       {importError && <div style={errorBox}>⚠ Error al importar: {importError}</div>}
 
       <div style={{ overflowX: "auto" }}>
@@ -437,8 +451,7 @@ export default function ImportarCostesClient({
         </button>
         <button
           type="button"
-          className="icon-button"
-          style={{ padding: "10px 28px", fontSize: 14 }}
+          style={{ padding: "10px 28px", fontSize: 14, cursor: "pointer", background: "var(--primary)", color: "#fff", border: "none", borderRadius: 6, fontWeight: 700, boxShadow: "var(--shadow)", whiteSpace: "nowrap", opacity: (isImporting || mappedCount === 0) ? 0.6 : 1 }}
           onClick={handleImport}
           disabled={isImporting || mappedCount === 0}
         >

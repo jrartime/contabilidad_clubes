@@ -23,6 +23,7 @@ export type CostesRow = {
   categoria_id?: number | null;
   concepto_id?: number | null;
   entidad_id?: number | null;
+  proveedor_id?: number | null;
 };
 
 type ActionResult =
@@ -58,17 +59,23 @@ export async function importarNominasCostesAction(rows: CostesRow[]): Promise<Ac
     categoria_id: r.categoria_id ?? null,
     concepto_id: r.concepto_id ?? null,
     entidad_id: r.entidad_id ?? null,
+    proveedor_id: r.proveedor_id ?? null,
   }));
 
-  const { error } = await supabase.from("contabilidad").insert(payload);
+  console.log("[importarNominasCostes] club_id:", clubId, "rows:", payload.length);
+
+  const { error, data } = await supabase.from("contabilidad").insert(payload).select("id_contabilidad");
 
   if (error) {
-    console.error("[importarNominasCostes] insert error:", error.code, error.message, error.details);
+    console.error("[importarNominasCostes] insert error:", error.code, error.message, error.details, JSON.stringify(error));
     return { ok: false, error: `${error.message}${error.details ? ` (${error.details})` : ""}` };
   }
 
+  const insertedCount = Array.isArray(data) ? data.length : payload.length;
+  console.log("[importarNominasCostes] inserted:", insertedCount, "ids:", JSON.stringify((data ?? []).map((r: any) => r.id_contabilidad)));
+
   revalidatePath("/nominas");
-  return { ok: true, count: payload.length };
+  return { ok: true, count: insertedCount };
 }
 
 // ─────────────────────────────────────────────────────

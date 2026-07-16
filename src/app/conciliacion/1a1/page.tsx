@@ -2,6 +2,14 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
 import { getMyClubRole, canAccessConciliation } from "@/lib/clubRole";
+import ConciliacionManualClient, {
+  type AsientoRow,
+  type BancoRow,
+  type PagoRow,
+} from "./ConciliacionManualClient";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function Conciliacion1a1Page() {
   const supabase = await createSupabaseServerClient();
@@ -11,131 +19,160 @@ export default async function Conciliacion1a1Page() {
   const clubId = await getActiveClubId();
   if (!clubId) redirect("/clubs");
 
-  // ✅ Control de acceso por rol
   const role = await getMyClubRole(clubId);
   if (!canAccessConciliation(role)) redirect("/no-autorizado");
 
-  const { data, error } = await supabase
-    .from("vw_sugerencias_conciliacion_1a1")
+  // ── 1. IDs ya conciliados ────────────────────────────────────────────────
+  const { data: pagosBruto } = await supabase
+    .from("pagos")
+    .select("contabilidad_id, banco_id, fecha_pago_real, importe_pagado")
+    .eq("club_id", clubId)
+    .order("fecha_pago_real", { ascending: false })
+    .limit(500);
+
+  const pagosList = pagosBruto ?? [];
+  const conciliadosContabilidadIds = pagosList.map((p: any) => p.contabilidad_id as number);
+  const conciliadosBancoIds = pagosList.map((p: any) => p.banco_id as number);
+
+  // ── 2. Asientos SIN conciliar ────────────────────────────────────────────
+  let asientosQ = supabase
+    .from("contabilidad")
     .select(
-      "club_id,id_contabilidad,fecha_factura,numero_factura,proveedor,importe_total,pendiente,id_banco,fecha_operativa,importe,detalle,referencia_1,referencia_2,dias_dif"
+      "id_contabilidad, fecha, numero_factura, importe_total, detalle, " +
+      "proveedor:proveedores!contabilidad_proveedor_fk(proveedor), " +
+      "programa_ref:programas!contabilidad_programa_id_fkey(programa), " +
+      "concepto_ref:conceptos!contabilidad_concepto_id_fkey(concepto)"
     )
     .eq("club_id", clubId)
-    .order("dias_dif", { ascending: true })
-    .limit(200);
+    .order("fecha", { ascending: false })
+    .limit(500);
+
+  if (conciliadosContabilidadIds.length > 0) {
+    asientosQ = asientosQ.not(
+      "id_contabilidad",
+      "in",
+      `(${conciliadosContabilidadIds.join(",")})`
+    );
+  }
+
+  // ── 3. Movimientos bancarios SIN conciliar ───────────────────────────────
+  let bancosQ = supabase
+    .from("bancos")
+    .select("id_banco, fecha_operativa, importe, detalle, referencia_1")
+    .eq("club_id", clubId)
+    .order("fecha_operativa", { ascending: false })
+    .limit(500);
+
+  if (conciliadosBancoIds.length > 0) {
+    bancosQ = bancosQ.not(
+      "id_banco",
+      "in",
+      `(${conciliadosBancoIds.join(",")})`
+    );
+  }
+
+  // ── 4. Detalle de los ya conciliados (para la pestaña "conciliados") ─────
+  const conciliadosContabilidadMap = new Map<number, any>();
+  const conciliadosBancoMap = new Map<number, any>();
+
+  const [
+    { data: asientosBruto },
+    { data: bancosBruto },
+    { data: asientosDetalle },
+    { data: bancosDetalle },
+  ] = await Promise.all([
+    asientosQ,
+    bancosQ,
+    conciliadosContabilidadIds.length > 0
+      ? supabase
+          .from("contabilidad")
+          .select(
+            "id_contabilidad, fecha, numero_factura, importe_total, detalle, " +
+            "proveedor:proveedores!contabilidad_proveedor_fk(proveedor), " +
+            "programa_ref:programas!contabilidad_programa_id_fkey(programa)"
+          )
+          .eq("club_id", clubId)
+          .in("id_contabilidad", conciliadosContabilidadIds)
+      : Promise.resolve({ data: [], error: null }),
+    conciliadosBancoIds.length > 0
+      ? supabase
+          .from("bancos")
+          .select("id_banco, fecha_operativa, importe, detalle, referencia_1")
+          .eq("club_id", clubId)
+          .in("id_banco", conciliadosBancoIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  // Poblar los mapas
+  for (const a of (asientosDetalle ?? [])) {
+    conciliadosContabilidadMap.set((a as any).id_contabilidad, a);
+  }
+  for (const b of (bancosDetalle ?? [])) {
+    conciliadosBancoMap.set((b as any).id_banco, b);
+  }
+
+  // ── Normalizar asientos ──────────────────────────────────────────────────
+  const asientos: AsientoRow[] = (asientosBruto ?? []).map((a: any) => ({
+    id_contabilidad: a.id_contabilidad,
+    fecha: a.fecha ?? null,
+    numero_factura: a.numero_factura ?? null,
+    proveedor: a.proveedor?.proveedor ?? null,
+    importe_total: Number(a.importe_total ?? 0),
+    programa: a.programa_ref?.programa ?? null,
+    concepto: a.concepto_ref?.concepto ?? null,
+    detalle: a.detalle ?? null,
+  }));
+
+  const movimientos: BancoRow[] = (bancosBruto ?? []).map((b: any) => ({
+    id_banco: b.id_banco,
+    fecha_operativa: b.fecha_operativa ?? null,
+    importe: Number(b.importe ?? 0),
+    detalle: b.detalle ?? null,
+    referencia_1: b.referencia_1 ?? null,
+  }));
+
+  const pagos: PagoRow[] = pagosList.map((p: any) => {
+    const a = conciliadosContabilidadMap.get(p.contabilidad_id);
+    const b = conciliadosBancoMap.get(p.banco_id);
+    return {
+      contabilidad_id: p.contabilidad_id,
+      banco_id: p.banco_id,
+      fecha_pago_real: p.fecha_pago_real ?? null,
+      importe_pagado: Number(p.importe_pagado ?? 0),
+      asiento: a
+        ? {
+            id_contabilidad: a.id_contabilidad,
+            fecha: a.fecha ?? null,
+            numero_factura: a.numero_factura ?? null,
+            proveedor: a.proveedor?.proveedor ?? null,
+            importe_total: Number(a.importe_total ?? 0),
+            programa: a.programa_ref?.programa ?? null,
+            concepto: null,
+            detalle: a.detalle ?? null,
+          }
+        : undefined,
+      banco: b
+        ? {
+            id_banco: b.id_banco,
+            fecha_operativa: b.fecha_operativa ?? null,
+            importe: Number(b.importe ?? 0),
+            detalle: b.detalle ?? null,
+            referencia_1: b.referencia_1 ?? null,
+          }
+        : undefined,
+    };
+  });
 
   return (
-    <div style={{ maxWidth: 1300, margin: "0 auto", padding: 16 }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800 }}>Conciliación 1 a 1</h1>
-</div>
-
-      {error && (
-        <p style={{ marginTop: 12 }}>
-          Error cargando sugerencias: <b>{error.message}</b>
-        </p>
-      )}
-
-      <p style={{ marginTop: 10, opacity: 0.8 }}>
-        Club: <b>{clubId}</b> · Registros mostrados: <b>{(data ?? []).length}</b>
-      </p>
-
-      <div style={{ overflowX: "auto", marginTop: 12 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr>
-              {[
-                "Factura",
-                "Proveedor",
-                "Fecha factura",
-                "Importe",
-                "Banco",
-                "Fecha banco",
-                "Importe banco",
-                "Días",
-                "Detalle banco",
-                "Acción",
-              ].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: "left",
-                    borderBottom: "1px solid #ddd",
-                    padding: 8,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {(data ?? []).map((r: any) => (
-              <tr key={`${r.id_contabilidad}-${r.id_banco}`}>
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  <div>
-                    <b>{r.numero_factura ?? "(sin nº)"}</b>
-                  </div>
-                  <div style={{ opacity: 0.7 }}>id_contabilidad: {r.id_contabilidad}</div>
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{r.proveedor}</td>
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{r.fecha_factura}</td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {Number(r.importe_total).toFixed(2)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  <b>id_banco: {r.id_banco}</b>
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{r.fecha_operativa}</td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  {Number(r.importe).toFixed(2)}
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{r.dias_dif}</td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  <div
-                    style={{
-                      maxWidth: 420,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {r.detalle}
-                  </div>
-                </td>
-
-                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
-                  <form action="/api/conciliar/1a1" method="post">
-                    <input type="hidden" name="club_id" value={clubId} />
-                    <input type="hidden" name="contabilidad_id" value={r.id_contabilidad} />
-                    <input type="hidden" name="banco_id" value={r.id_banco} />
-                    <button type="submit" style={{ padding: "6px 10px", cursor: "pointer" }}>
-                      Conciliar
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-
-            {(data ?? []).length === 0 && !error && (
-              <tr>
-                <td colSpan={10} style={{ padding: 12, opacity: 0.8 }}>
-                  No hay sugerencias 1a1 para este club.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+    <div style={{ maxWidth: 1400, margin: "0 auto", padding: 16 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>Conciliación 1 a 1</h1>
       </div>
+      <ConciliacionManualClient
+        asientos={asientos}
+        movimientos={movimientos}
+        pagos={pagos}
+      />
     </div>
   );
 }

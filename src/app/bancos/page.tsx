@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { readSheet } from "read-excel-file/browser";
+import * as XLSX from "xlsx";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
@@ -88,7 +88,7 @@ function toIsoDateFromExcel(value: unknown): string | null {
   if (iso) return `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`;
 
   const es = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(raw);
-  if (!es) return raw;
+  if (!es) return null;
   const year = es[3].length === 2 ? `20${es[3]}` : es[3];
   return `${year}-${es[2].padStart(2, "0")}-${es[1].padStart(2, "0")}`;
 }
@@ -221,12 +221,20 @@ async function importBancoExcel(formData: FormData) {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  const rows = (await readSheet(file)) as unknown[][];
+  const buffer = Buffer.from(await (file as File).arrayBuffer());
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: null,
+    blankrows: false,
+  }) as unknown[][];
 
   const dataRows = rows.filter(hasAnyExcelValue);
   const first = dataRows[0] ?? [];
-  const firstCell = String(first[0] ?? "").trim().toLowerCase();
-  const rowsWithoutHeader = firstCell.includes("fecha") ? dataRows.slice(1) : dataRows;
+  // Si la primera celda no se puede parsear como fecha válida → es cabecera, saltarla
+  const firstIsHeader = toIsoDateFromExcel(first[0]) === null;
+  const rowsWithoutHeader = firstIsHeader ? dataRows.slice(1) : dataRows;
 
   const payload = rowsWithoutHeader
     .map((row) => ({
