@@ -476,6 +476,27 @@ export default async function NominasPage({
   if (fechaDesde) q = q.gte("fecha", fechaDesde);
   if (fechaHasta) q = q.lte("fecha", fechaHasta);
 
+  let filterOptionsQ = supabase
+    .from("contabilidad")
+    .select("personal_id, programa_id, categoria_id")
+    .eq("club_id", clubId)
+    .eq("tipo_id", NOMINA_TIPO_ID);
+
+  if (hasProgramaFilter) {
+    filterOptionsQ = isProgramaNoneFilter
+      ? filterOptionsQ.is("programa_id", null)
+      : filterOptionsQ.eq("programa_id", programaFilterId);
+  } else if (activeProgramIds.length > 0) {
+    filterOptionsQ = filterOptionsQ.or(`programa_id.is.null,programa_id.in.(${activeProgramIds.join(",")})`);
+  } else {
+    filterOptionsQ = filterOptionsQ.is("programa_id", null);
+  }
+  if (hasPersonalFilter) filterOptionsQ = filterOptionsQ.eq("personal_id", personalFilterId);
+  if (hasCategoriaFilter) filterOptionsQ = filterOptionsQ.eq("categoria_id", categoriaFilterId);
+  if (fechaDesde) filterOptionsQ = filterOptionsQ.gte("fecha", fechaDesde);
+  if (fechaHasta) filterOptionsQ = filterOptionsQ.lte("fecha", fechaHasta);
+  const filterOptionsPromise = filterOptionsQ;
+
   const nominasPromise = q
     .order("fecha", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -488,6 +509,7 @@ export default async function NominasPage({
     { data: personal },
     { data: categorias },
     { data: rows, error },
+    { data: filterOptionsRows },
   ] = await Promise.all([
     proveedoresPromise,
     conceptosPromise,
@@ -495,9 +517,18 @@ export default async function NominasPage({
     personalPromise,
     categoriasPromise,
     nominasPromise,
+    filterOptionsPromise,
   ]);
 
   const rowsAny = (rows ?? []) as any[];
+  const filterOptionRowsAny = (filterOptionsRows ?? []) as any[];
+  const availablePersonalIds = new Set(filterOptionRowsAny.map((r) => Number(r.personal_id)).filter(Number.isFinite));
+  const availableProgramaIds = new Set(filterOptionRowsAny.map((r) => Number(r.programa_id)).filter(Number.isFinite));
+  const availableCategoriaIds = new Set(filterOptionRowsAny.map((r) => Number(r.categoria_id)).filter(Number.isFinite));
+  const hasAvailableNoPrograma = filterOptionRowsAny.some((r) => r.programa_id == null);
+  const filterPersonal = (personal ?? []).filter((p: any) => availablePersonalIds.has(Number(p.id_personal)) || Number(p.id_personal) === personalFilterId);
+  const filterProgramas = (programas ?? []).filter((p: any) => availableProgramaIds.has(Number(p.id_programa)) || Number(p.id_programa) === programaFilterId);
+  const filterCategorias = (categorias ?? []).filter((c: any) => availableCategoriaIds.has(Number(c.id_categoria)) || Number(c.id_categoria) === categoriaFilterId);
 
   // Totales por categoría (A/B/otras) como contabilidad
   type Tot = {
@@ -953,22 +984,22 @@ export default async function NominasPage({
           <span>Personal</span>
           <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
             <option value="">Todos</option>
-            {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
+            {filterPersonal.map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
           </select>
         </label>
         <label className="filter-field">
           <span>Programa</span>
           <select name="programa_id" defaultValue={hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : ""}>
             <option value="">Todos</option>
-            <option value="none">(sin programa)</option>
-            {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.programa}</option>)}
+            {(hasAvailableNoPrograma || isProgramaNoneFilter) ? <option value="none">(sin programa)</option> : null}
+            {filterProgramas.map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.programa}</option>)}
           </select>
         </label>
         <label className="filter-field">
           <span>Categoría</span>
           <select name="categoria_id" defaultValue={hasCategoriaFilter ? String(categoriaFilterId) : ""}>
             <option value="">Todas</option>
-            {(categorias ?? []).map((c: any) => <option key={c.id_categoria} value={c.id_categoria}>{c.categoria}</option>)}
+            {filterCategorias.map((c: any) => <option key={c.id_categoria} value={c.id_categoria}>{c.categoria}</option>)}
           </select>
         </label>
       </AutoSubmitFilters>

@@ -121,6 +121,13 @@ export async function duplicateNominaAction(id_contabilidad: number) {
       tipo_id: 3,
       fecha: null,
       fecha_pago: null,
+      bruto: null,
+      coste_empresarial: null,
+      ss: null,
+      bruto_imputado: null,
+      ss_imputado: null,
+      importe_total: 0,
+      importe_imputado: 0,
     })
     .select("id_contabilidad")
     .single();

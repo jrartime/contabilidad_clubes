@@ -154,6 +154,13 @@ export default function NominasTable({
           id_contabilidad: inserted.id_contabilidad,
           fecha: null,
           fecha_pago: null,
+          bruto: null,
+          coste_empresarial: null,
+          ss: null,
+          bruto_imputado: null,
+          ss_imputado: null,
+          importe_total: null,
+          importe_imputado: null,
         };
         setRows((prev) => [duplicatedRow, ...prev]);
         openEditPanel(duplicatedRow);

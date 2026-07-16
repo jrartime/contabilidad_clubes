@@ -368,12 +368,37 @@ export default async function BancosPage({
   if (fechaOperativaDesde) q = q.gte("fecha_operativa", fechaOperativaDesde);
   if (fechaOperativaHasta) q = q.lte("fecha_operativa", fechaOperativaHasta);
 
+  let filterOptionsQ = supabase
+    .from("bancos")
+    .select("programa_id, concepto_id")
+    .eq("club_id", clubId);
+
+  if (hasProgramaFilter) {
+    filterOptionsQ = isProgramaNoneFilter
+      ? filterOptionsQ.is("programa_id", null)
+      : filterOptionsQ.eq("programa_id", programaFilterId);
+  } else if (activeProgramIds.length > 0) {
+    filterOptionsQ = filterOptionsQ.or(`programa_id.is.null,programa_id.in.(${activeProgramIds.join(",")})`);
+  } else {
+    filterOptionsQ = filterOptionsQ.is("programa_id", null);
+  }
+  if (hasConceptoFilter) filterOptionsQ = filterOptionsQ.eq("concepto_id", conceptoFilterId);
+  if (fechaOperativaDesde) filterOptionsQ = filterOptionsQ.gte("fecha_operativa", fechaOperativaDesde);
+  if (fechaOperativaHasta) filterOptionsQ = filterOptionsQ.lte("fecha_operativa", fechaOperativaHasta);
+
   const { data: rows, error } = await q
     .order(sortKey, { ascending: sortDir === "asc", nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(2000);
 
   const rowsAny = (rows ?? []) as any[];
+  const { data: filterOptionsRows } = await filterOptionsQ;
+  const filterOptionRowsAny = (filterOptionsRows ?? []) as any[];
+  const availableProgramaIds = new Set(filterOptionRowsAny.map((r) => Number(r.programa_id)).filter(Number.isFinite));
+  const availableConceptoIds = new Set(filterOptionRowsAny.map((r) => Number(r.concepto_id)).filter(Number.isFinite));
+  const hasAvailableNoPrograma = filterOptionRowsAny.some((r) => r.programa_id == null);
+  const filterProgramas = (programas ?? []).filter((p: any) => availableProgramaIds.has(Number(p.id_programa)) || Number(p.id_programa) === programaFilterId);
+  const filterConceptos = (conceptos ?? []).filter((c: any) => availableConceptoIds.has(Number(c.id_concepto)) || Number(c.id_concepto) === conceptoFilterId);
 
   let editRow: any =
     editId !== null ? rowsAny.find((r) => Number(r.id_banco) === Number(editId)) : null;
@@ -827,15 +852,15 @@ export default async function BancosPage({
           <span>Programa</span>
           <select name="programa_id" defaultValue={filterValue ?? ""}>
             <option value="">Todos</option>
-            <option value="none">(sin programa)</option>
-            {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
+            {(hasAvailableNoPrograma || isProgramaNoneFilter) ? <option value="none">(sin programa)</option> : null}
+            {filterProgramas.map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
           </select>
         </label>
         <label className="filter-field">
           <span>Concepto</span>
           <select name="concepto_id" defaultValue={hasConceptoFilter ? String(conceptoFilterId) : ""}>
             <option value="">Todos</option>
-            {(conceptos ?? []).map((c: any) => <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>)}
+            {filterConceptos.map((c: any) => <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>)}
           </select>
         </label>
       </AutoSubmitFilters>

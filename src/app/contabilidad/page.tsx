@@ -428,6 +428,27 @@ export default async function ContabilidadPage({
   if (fechaDesde) q = q.gte("fecha", fechaDesde);
   if (fechaHasta) q = q.lte("fecha", fechaHasta);
 
+  let filterOptionsQ = supabase
+    .from("contabilidad")
+    .select("tipo_id, proveedor_id, personal_id, programa_id")
+    .eq("club_id", clubId);
+
+  if (hasProgramaFilter) {
+    filterOptionsQ = isProgramaNoneFilter
+      ? filterOptionsQ.is("programa_id", null)
+      : filterOptionsQ.eq("programa_id", programaFilterId);
+  } else if (activeProgramIds.length > 0) {
+    filterOptionsQ = filterOptionsQ.or(`programa_id.is.null,programa_id.in.(${activeProgramIds.join(",")})`);
+  } else {
+    filterOptionsQ = filterOptionsQ.is("programa_id", null);
+  }
+  if (hasProveedorFilter) filterOptionsQ = filterOptionsQ.eq("proveedor_id", proveedorFilterId);
+  if (hasPersonalFilter) filterOptionsQ = filterOptionsQ.eq("personal_id", personalFilterId);
+  if (hasTipoFilter) filterOptionsQ = filterOptionsQ.eq("tipo_id", tipoFilterId);
+  if (fechaDesde) filterOptionsQ = filterOptionsQ.gte("fecha", fechaDesde);
+  if (fechaHasta) filterOptionsQ = filterOptionsQ.lte("fecha", fechaHasta);
+  const filterOptionsPromise = filterOptionsQ;
+
   const contabilidadPromise = q
     .order("fecha", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -453,6 +474,7 @@ export default async function ContabilidadPage({
     { data: rows, error },
     { data: bancosIngresosData },
     { data: totalsRows },
+    { data: filterOptionsRows },
   ] = await Promise.all([
     tiposPromise,
     proveedoresPromise,
@@ -463,7 +485,19 @@ export default async function ContabilidadPage({
     contabilidadPromise,
     bancosIngresosPromise,
     totalsPromise,
+    filterOptionsPromise,
   ]);
+
+  const filterOptionRowsAny = (filterOptionsRows ?? []) as any[];
+  const availableTipoIds = new Set(filterOptionRowsAny.map((r) => Number(r.tipo_id)).filter(Number.isFinite));
+  const availableProveedorIds = new Set(filterOptionRowsAny.map((r) => Number(r.proveedor_id)).filter(Number.isFinite));
+  const availablePersonalIds = new Set(filterOptionRowsAny.map((r) => Number(r.personal_id)).filter(Number.isFinite));
+  const availableProgramaIds = new Set(filterOptionRowsAny.map((r) => Number(r.programa_id)).filter(Number.isFinite));
+  const hasAvailableNoPrograma = filterOptionRowsAny.some((r) => r.programa_id == null);
+  const filterTipos = (tipos ?? []).filter((t: any) => availableTipoIds.has(Number(t.id_tipo)) || Number(t.id_tipo) === tipoFilterId);
+  const filterProveedores = (proveedores ?? []).filter((p: any) => availableProveedorIds.has(Number(p.id_proveedor)) || Number(p.id_proveedor) === proveedorFilterId);
+  const filterPersonal = (personal ?? []).filter((p: any) => availablePersonalIds.has(Number(p.id_personal)) || Number(p.id_personal) === personalFilterId);
+  const filterProgramas = (programas ?? []).filter((p: any) => availableProgramaIds.has(Number(p.id_programa)) || Number(p.id_programa) === programaFilterId);
 
 type Tot = { total: number; imputado: number; count: number };
 
@@ -1043,29 +1077,29 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
           <span>Tipo</span>
           <select name="tipo_id" defaultValue={hasTipoFilter ? String(tipoFilterId) : ""}>
             <option value="">Todos</option>
-            {(tipos ?? []).map((t: any) => <option key={t.id_tipo} value={t.id_tipo}>{t.tipo}</option>)}
+            {filterTipos.map((t: any) => <option key={t.id_tipo} value={t.id_tipo}>{t.tipo}</option>)}
           </select>
         </label>
         <label className="filter-field">
           <span>Proveedor</span>
           <select name="proveedor_id" defaultValue={hasProveedorFilter ? String(proveedorFilterId) : ""}>
             <option value="">Todos</option>
-            {(proveedores ?? []).map((p: any) => <option key={p.id_proveedor} value={p.id_proveedor}>{p.proveedor}</option>)}
+            {filterProveedores.map((p: any) => <option key={p.id_proveedor} value={p.id_proveedor}>{p.proveedor}</option>)}
           </select>
         </label>
         <label className="filter-field">
           <span>Personal</span>
           <select name="personal_id" defaultValue={hasPersonalFilter ? String(personalFilterId) : ""}>
             <option value="">Todos</option>
-            {(personal ?? []).map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
+            {filterPersonal.map((p: any) => <option key={p.id_personal} value={p.id_personal}>{p.nombre}</option>)}
           </select>
         </label>
         <label className="filter-field">
           <span>Programa</span>
           <select name="programa_id" defaultValue={programaFilterValue ?? ""}>
             <option value="">Todos</option>
-            <option value="none">(sin programa)</option>
-            {(programas ?? []).map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
+            {(hasAvailableNoPrograma || isProgramaNoneFilter) ? <option value="none">(sin programa)</option> : null}
+            {filterProgramas.map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
           </select>
         </label>
       </AutoSubmitFilters>
