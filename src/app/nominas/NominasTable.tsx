@@ -148,13 +148,19 @@ export default function NominasTable({
     if (!panelRow) return;
     setPanelDuplicating(true);
     duplicateNominaAction(panelRow.id_contabilidad)
-      .then(() => {
-        router.refresh();
-        closeEditPanel();
+      .then((inserted) => {
+        const duplicatedRow: NominaRow = {
+          ...panelRow,
+          id_contabilidad: inserted.id_contabilidad,
+          fecha: null,
+          fecha_pago: null,
+        };
+        setRows((prev) => [duplicatedRow, ...prev]);
+        openEditPanel(duplicatedRow);
       })
       .catch((e: unknown) => alert(e instanceof Error ? e.message : String(e)))
       .finally(() => setPanelDuplicating(false));
-  }, [panelRow, router, closeEditPanel]);
+  }, [panelRow, openEditPanel]);
 
   // Cerrar panel con Escape
   useEffect(() => {
