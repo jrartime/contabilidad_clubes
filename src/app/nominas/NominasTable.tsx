@@ -12,7 +12,7 @@ import {
   toDecimalInputValue,
 } from "@/lib/format";
 import { parseDecimalToNumber } from "@/lib/decimal";
-import { updateNominaAction } from "./actions";
+import { duplicateNominaAction, updateNominaAction } from "./actions";
 
 type NominaRow = {
   id_contabilidad: number;
@@ -84,6 +84,7 @@ export default function NominasTable({
   const [panelRow, setPanelRow] = useState<NominaRow | null>(null);
   const [panelForm, setPanelForm] = useState<Record<string, string>>({});
   const [panelSaving, setPanelSaving] = useState(false);
+  const [panelDuplicating, setPanelDuplicating] = useState(false);
 
   const openEditPanel = useCallback((r: NominaRow) => {
     setPanelRow(r);
@@ -142,6 +143,18 @@ export default function NominasTable({
       .catch((e: unknown) => alert(e instanceof Error ? e.message : String(e)))
       .finally(() => setPanelSaving(false));
   }, [panelRow, panelForm, router, closeEditPanel]);
+
+  const duplicatePanelRow = useCallback(() => {
+    if (!panelRow) return;
+    setPanelDuplicating(true);
+    duplicateNominaAction(panelRow.id_contabilidad)
+      .then(() => {
+        router.refresh();
+        closeEditPanel();
+      })
+      .catch((e: unknown) => alert(e instanceof Error ? e.message : String(e)))
+      .finally(() => setPanelDuplicating(false));
+  }, [panelRow, router, closeEditPanel]);
 
   // Cerrar panel con Escape
   useEffect(() => {
@@ -235,6 +248,7 @@ export default function NominasTable({
   }
 
   // Estilos reutilizables del panel
+  const panelBusy = panelSaving || panelDuplicating;
   const pL: React.CSSProperties = { display: "grid", gap: 4, fontSize: 13, fontWeight: 600 };
   const pI: React.CSSProperties = { padding: "6px 8px", fontSize: 13, borderRadius: 6, border: "1px solid #ddd", width: "100%", boxSizing: "border-box" };
 
@@ -580,7 +594,7 @@ export default function NominasTable({
                 onClick={closeEditPanel}
                 className="icon-button icon-button-secondary tooltip-button"
                 aria-label="Cerrar"
-                disabled={panelSaving}
+                disabled={panelBusy}
               >
                 <Icon name="logout" />
               </button>
@@ -591,11 +605,11 @@ export default function NominasTable({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={pL}>
                   Fecha (devengo)
-                  <input type="date" value={panelForm.fecha} onChange={(e) => setPanelForm((f) => ({ ...f, fecha: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input type="date" value={panelForm.fecha} onChange={(e) => setPanelForm((f) => ({ ...f, fecha: e.target.value }))} disabled={panelBusy} style={pI} />
                 </label>
                 <label style={pL}>
                   Fecha pago
-                  <input type="date" value={panelForm.fecha_pago} onChange={(e) => setPanelForm((f) => ({ ...f, fecha_pago: e.target.value }))} disabled={panelSaving} style={pI} />
+                  <input type="date" value={panelForm.fecha_pago} onChange={(e) => setPanelForm((f) => ({ ...f, fecha_pago: e.target.value }))} disabled={panelBusy} style={pI} />
                 </label>
               </div>
 
@@ -603,14 +617,14 @@ export default function NominasTable({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={pL}>
                   Personal
-                  <select value={panelForm.personal_id} onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                  <select value={panelForm.personal_id} onChange={(e) => setPanelForm((f) => ({ ...f, personal_id: e.target.value }))} disabled={panelBusy} style={pI}>
                     <option value="">(sin personal)</option>
                     {personalOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </label>
                 <label style={pL}>
                   Proveedor
-                  <select value={panelForm.proveedor_id} onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                  <select value={panelForm.proveedor_id} onChange={(e) => setPanelForm((f) => ({ ...f, proveedor_id: e.target.value }))} disabled={panelBusy} style={pI}>
                     <option value="">(sin proveedor)</option>
                     {proveedorOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
@@ -621,21 +635,21 @@ export default function NominasTable({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <label style={pL}>
                   Programa
-                  <select value={panelForm.programa_id} onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                  <select value={panelForm.programa_id} onChange={(e) => setPanelForm((f) => ({ ...f, programa_id: e.target.value }))} disabled={panelBusy} style={pI}>
                     <option value="">(sin programa)</option>
                     {programaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </label>
                 <label style={pL}>
                   Categoría
-                  <select value={panelForm.categoria_id} onChange={(e) => setPanelForm((f) => ({ ...f, categoria_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                  <select value={panelForm.categoria_id} onChange={(e) => setPanelForm((f) => ({ ...f, categoria_id: e.target.value }))} disabled={panelBusy} style={pI}>
                     <option value="">(sin cat.)</option>
                     {categoriaOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
                 </label>
                 <label style={pL}>
                   Concepto
-                  <select value={panelForm.concepto_id} onChange={(e) => setPanelForm((f) => ({ ...f, concepto_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                  <select value={panelForm.concepto_id} onChange={(e) => setPanelForm((f) => ({ ...f, concepto_id: e.target.value }))} disabled={panelBusy} style={pI}>
                     <option value="">(sin conc.)</option>
                     {conceptoOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                   </select>
@@ -645,7 +659,7 @@ export default function NominasTable({
               {/* Entidad */}
               <label style={pL}>
                 Entidad
-                <select value={panelForm.entidad_id} onChange={(e) => setPanelForm((f) => ({ ...f, entidad_id: e.target.value }))} disabled={panelSaving} style={pI}>
+                <select value={panelForm.entidad_id} onChange={(e) => setPanelForm((f) => ({ ...f, entidad_id: e.target.value }))} disabled={panelBusy} style={pI}>
                   <option value="">(sin entidad)</option>
                   {entidadOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </select>
@@ -659,7 +673,7 @@ export default function NominasTable({
                 <label style={pL}>
                   Bruto
                   <input
-                    type="text" inputMode="decimal" value={panelForm.bruto} disabled={panelSaving} style={pI}
+                    type="text" inputMode="decimal" value={panelForm.bruto} disabled={panelBusy} style={pI}
                     onChange={(e) => setPanelForm((f) => ({ ...f, bruto: e.target.value }))}
                     onBlur={() => setPanelForm((f) => recomputePanel(f))}
                   />
@@ -667,7 +681,7 @@ export default function NominasTable({
                 <label style={pL}>
                   Coste empresarial
                   <input
-                    type="text" inputMode="decimal" value={panelForm.coste_empresarial} disabled={panelSaving} style={pI}
+                    type="text" inputMode="decimal" value={panelForm.coste_empresarial} disabled={panelBusy} style={pI}
                     onChange={(e) => setPanelForm((f) => ({ ...f, coste_empresarial: e.target.value }))}
                     onBlur={() => setPanelForm((f) => recomputePanel(f))}
                   />
@@ -675,7 +689,7 @@ export default function NominasTable({
                 <label style={pL}>
                   SS
                   <input
-                    type="text" inputMode="decimal" value={panelForm.ss} disabled={panelSaving} style={pI}
+                    type="text" inputMode="decimal" value={panelForm.ss} disabled={panelBusy} style={pI}
                     onChange={(e) => setPanelForm((f) => ({ ...f, ss: e.target.value }))}
                   />
                 </label>
@@ -689,26 +703,26 @@ export default function NominasTable({
                 <label style={pL}>
                   Bruto imputado
                   <input
-                    type="text" inputMode="decimal" value={panelForm.bruto_imputado} disabled={panelSaving} style={pI}
+                    type="text" inputMode="decimal" value={panelForm.bruto_imputado} disabled={panelBusy} style={pI}
                     onChange={(e) => setPanelForm((f) => recomputeImputado({ ...f, bruto_imputado: e.target.value }))}
                   />
                 </label>
                 <label style={pL}>
                   SS imputado
                   <input
-                    type="text" inputMode="decimal" value={panelForm.ss_imputado} disabled={panelSaving} style={pI}
+                    type="text" inputMode="decimal" value={panelForm.ss_imputado} disabled={panelBusy} style={pI}
                     onChange={(e) => setPanelForm((f) => recomputeImputado({ ...f, ss_imputado: e.target.value }))}
                   />
                 </label>
                 <label style={pL}>
                   Importe total
-                  <input type="text" inputMode="decimal" value={panelForm.importe_total} disabled={panelSaving} style={{ ...pI, background: "#f8f8f8" }}
+                  <input type="text" inputMode="decimal" value={panelForm.importe_total} disabled={panelBusy} style={{ ...pI, background: "#f8f8f8" }}
                     onChange={(e) => setPanelForm((f) => ({ ...f, importe_total: e.target.value }))}
                   />
                 </label>
                 <label style={pL}>
                   Importe imputado
-                  <input type="text" inputMode="decimal" value={panelForm.importe_imputado} disabled={panelSaving} style={{ ...pI, background: "#f8f8f8" }}
+                  <input type="text" inputMode="decimal" value={panelForm.importe_imputado} disabled={panelBusy} style={{ ...pI, background: "#f8f8f8" }}
                     onChange={(e) => setPanelForm((f) => ({ ...f, importe_imputado: e.target.value }))}
                   />
                 </label>
@@ -717,7 +731,7 @@ export default function NominasTable({
               {/* Detalle */}
               <label style={pL}>
                 Detalle
-                <input type="text" value={panelForm.detalle} onChange={(e) => setPanelForm((f) => ({ ...f, detalle: e.target.value }))} disabled={panelSaving} style={pI} />
+                <input type="text" value={panelForm.detalle} onChange={(e) => setPanelForm((f) => ({ ...f, detalle: e.target.value }))} disabled={panelBusy} style={pI} />
               </label>
             </div>
 
@@ -725,23 +739,34 @@ export default function NominasTable({
               <button
                 type="button"
                 onClick={savePanelForm}
-                disabled={panelSaving}
+                disabled={panelBusy}
                 className="icon-button tooltip-button"
-                aria-label={panelSaving ? "Guardando…" : "Guardar cambios"}
+                aria-label={panelDuplicating ? "Duplicando..." : panelSaving ? "Guardando..." : "Guardar cambios"}
               >
                 <Icon name="save" />
               </button>
               <button
                 type="button"
+                onClick={duplicatePanelRow}
+                disabled={panelBusy}
+                className="icon-button icon-button-secondary tooltip-button"
+                aria-label={panelDuplicating ? "Duplicando..." : "Duplicar nomina sin fechas"}
+              >
+                <Icon name="duplicate" />
+              </button>
+              <button
+                type="button"
                 onClick={closeEditPanel}
-                disabled={panelSaving}
+                disabled={panelBusy}
                 className="icon-button icon-button-secondary tooltip-button"
                 aria-label="Cancelar"
               >
                 <Icon name="logout" />
               </button>
-              {panelSaving && (
-                <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>Guardando…</span>
+              {panelBusy && (
+                <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>
+                  {panelDuplicating ? "Duplicando..." : "Guardando..."}
+                </span>
               )}
             </div>
           </div>

@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
@@ -68,4 +69,64 @@ export async function updateNominaAction(payload: {
     .eq("id_contabilidad", payload.id_contabilidad);
 
   if (error) throw new Error(error.message);
+}
+
+export async function duplicateNominaAction(id_contabilidad: number) {
+  const supabase = await createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) redirect("/login");
+
+  const clubId = await getActiveClubId();
+  if (!clubId) redirect("/clubs");
+
+  const myRole = await getMyClubRole(clubId);
+  if (!canEditClubData(myRole)) redirect("/no-autorizado");
+
+  const { data: original, error: readError } = await supabase
+    .from("contabilidad")
+    .select(
+      [
+        "tipo_id",
+        "bruto",
+        "bruto_imputado",
+        "coste_empresarial",
+        "ss",
+        "ss_imputado",
+        "personal_id",
+        "proveedor_id",
+        "importe_total",
+        "importe_imputado",
+        "concepto_id",
+        "entidad_id",
+        "programa_id",
+        "categoria_id",
+        "detalle",
+      ].join(",")
+    )
+    .eq("club_id", clubId)
+    .eq("tipo_id", 3)
+    .eq("id_contabilidad", id_contabilidad)
+    .single();
+
+  if (readError) throw new Error(readError.message);
+  if (!original || typeof original !== "object") {
+    throw new Error("No se encontro la nomina original.");
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("contabilidad")
+    .insert({
+      ...(original as Record<string, unknown>),
+      club_id: clubId,
+      tipo_id: 3,
+      fecha: null,
+      fecha_pago: null,
+    })
+    .select("id_contabilidad")
+    .single();
+
+  if (insertError) throw new Error(insertError.message);
+
+  revalidatePath("/nominas");
+  return inserted;
 }
