@@ -11,7 +11,9 @@ import { buildFilterHref } from "@/lib/filters";
 import NominaForm from "./NominaForm";
 import NominasTable from "./NominasTable";
 import { normalizeDecimalString, parseDecimalToNumber } from "@/lib/decimal";
-import { formatDateEs, formatDecimal } from "@/lib/format";
+import { formatDecimal } from "@/lib/format";
+import { SubsidyExecutionSummary } from "@/components/SubsidyExecutionSummary";
+import { getSubsidyExecutionTotals } from "@/lib/subsidyExecution";
 import {
   deleteContabilidadWithDocsAction,
   deleteDocumentoAction,
@@ -36,6 +38,7 @@ type NominasSortKey =
   | "importe_imputado"
   | "fecha_pago";
 type SortDirection = "asc" | "desc";
+type MonthlySortKey = "mes" | "count" | "bruto" | "coste" | "ss" | "total" | "imputado";
 
 function toNullableBigint(v: FormDataEntryValue | null): number | null {
   const s = String(v ?? "").trim();
@@ -325,6 +328,8 @@ export default async function NominasPage({
     dir?: string;
     importados?: string;
     resumen?: string;
+    resumen_sort?: string;
+    resumen_dir?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -345,6 +350,18 @@ export default async function NominasPage({
   const editId = sp.edit ? Number(sp.edit) : null;
   const isNewPanel = sp.panel === "new";
   const showResumenMensual = sp.resumen === "mensual";
+  const resumenSortKey = ([
+    "mes",
+    "count",
+    "bruto",
+    "coste",
+    "ss",
+    "total",
+    "imputado",
+  ].includes(String(sp.resumen_sort))
+    ? sp.resumen_sort
+    : "mes") as MonthlySortKey;
+  const resumenSortDirection: SortDirection = sp.resumen_dir === "asc" ? "asc" : "desc";
 
   const programaFilter = parseProgramaFilterValue(sp.programa_id);
   const personalFilterId = sp.personal_id ? Number(sp.personal_id) : null;
@@ -407,7 +424,7 @@ export default async function NominasPage({
   // Programas primero (solo activos) para filtrar la query principal
   const { data: programas } = await supabase
     .from("programas")
-    .select("id_programa, programa")
+    .select("id_programa, programa, anio, subvencion, fecha_limite")
     .eq("club_id", clubId)
     .eq("activo", true)
     .order("programa", { ascending: true });
@@ -617,7 +634,34 @@ export default async function NominasPage({
         return acc;
       }, new Map<string, MonthlyTot>())
       .values()
-  ).sort((a, b) => b.key.localeCompare(a.key));
+  ).sort((a, b) => {
+    const av = resumenSortKey === "mes" ? a.key : a[resumenSortKey];
+    const bv = resumenSortKey === "mes" ? b.key : b[resumenSortKey];
+    const result =
+      resumenSortKey === "mes"
+        ? String(av).localeCompare(String(bv), "es")
+        : Number(av) - Number(bv);
+    return resumenSortDirection === "asc" ? result : -result;
+  });
+  const resumenMensualTotales = resumenMensualRows.reduce(
+    (acc, row) => {
+      acc.count += row.count;
+      acc.bruto += row.bruto;
+      acc.coste += row.coste;
+      acc.ss += row.ss;
+      acc.total += row.total;
+      acc.imputado += row.imputado;
+      return acc;
+    },
+    { count: 0, bruto: 0, coste: 0, ss: 0, total: 0, imputado: 0 }
+  );
+  const programaSeleccionado =
+    hasProgramaFilter && !isProgramaNoneFilter
+      ? (programas ?? []).find((p: any) => Number(p.id_programa) === Number(programaFilterId))
+      : null;
+  const subsidyExecution = programaSeleccionado
+    ? await getSubsidyExecutionTotals(supabase, clubId, Number(programaSeleccionado.id_programa))
+    : null;
 
   // Edit row
   let editRow: any =
@@ -678,9 +722,11 @@ export default async function NominasPage({
     programa_id: hasProgramaFilter ? (isProgramaNoneFilter ? "none" : String(programaFilterId)) : "",
     categoria_id: hasCategoriaFilter ? String(categoriaFilterId) : "",
     resumen: showResumenMensual ? "mensual" : "",
+    resumen_sort: showResumenMensual ? resumenSortKey : "",
+    resumen_dir: showResumenMensual ? resumenSortDirection : "",
   };
   const resumenMensualHref = showResumenMensual
-    ? buildFilterHref("/nominas", nominaFilterParams, ["resumen"])
+    ? buildFilterHref("/nominas", nominaFilterParams, ["resumen", "resumen_sort", "resumen_dir"])
     : buildFilterHref("/nominas", { ...nominaFilterParams, resumen: "mensual" }, []);
   const listHref = buildFilterHref("/nominas", nominaFilterParams, []);
   const editRedirectParams = new URLSearchParams(
@@ -738,36 +784,50 @@ export default async function NominasPage({
     return sortDirection === "asc" ? result : -result;
   });
 
-  function sortHref(nextSort: NominasSortKey) {
-    return buildFilterHref(
+  function resumenSortHeader(
+    nextSort: MonthlySortKey,
+    label: string,
+    align: "left" | "right" = "right"
+  ) {
+    const active = resumenSortKey === nextSort;
+    const nextDirection =
+      active && resumenSortDirection === "asc" ? "desc" : "asc";
+    const href = buildFilterHref(
       "/nominas",
       {
         ...nominaFilterParams,
-        sort: nextSort,
-        dir: sortKey === nextSort && sortDirection === "asc" ? "desc" : "asc",
+        resumen: "mensual",
+        resumen_sort: nextSort,
+        resumen_dir: nextDirection,
       },
       []
     );
-  }
-
-  function sortHeader(nextSort: NominasSortKey, label: string) {
-    const active = sortKey === nextSort;
     return (
       <th
         style={{
-          textAlign: "left",
+          textAlign: align,
           borderBottom: "1px solid #ddd",
           padding: 8,
           whiteSpace: "nowrap",
         }}
       >
         <Link
-          href={sortHref(nextSort)}
+          href={href}
           className="table-sort-button"
-          aria-label={`Ordenar por ${label}`}
+          style={{ justifyContent: align === "right" ? "flex-end" : "flex-start" }}
+          aria-label={`Ordenar resumen mensual por ${label}`}
         >
-          <span>{label}</span>
-          <span aria-hidden="true">{active ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}</span>
+          {align === "right" ? (
+            <>
+              <span aria-hidden="true">{active ? (resumenSortDirection === "asc" ? "↑" : "↓") : "↕"}</span>
+              <span>{label}</span>
+            </>
+          ) : (
+            <>
+              <span>{label}</span>
+              <span aria-hidden="true">{active ? (resumenSortDirection === "asc" ? "↑" : "↓") : "↕"}</span>
+            </>
+          )}
         </Link>
       </th>
     );
@@ -1104,6 +1164,17 @@ export default async function NominasPage({
         </div>
       </div>
 
+      {programaSeleccionado && subsidyExecution ? (
+        <SubsidyExecutionSummary
+          programa={programaSeleccionado.programa}
+          anio={programaSeleccionado.anio}
+          subvencion={Number(programaSeleccionado.subvencion ?? 0) || 0}
+          ingresosBanco={subsidyExecution.ingresosBanco}
+          ejecutado={subsidyExecution.ejecutado}
+          fechaLimite={programaSeleccionado.fecha_limite}
+        />
+      ) : null}
+
       {showResumenMensual ? (
         <div
           style={{
@@ -1120,21 +1191,13 @@ export default async function NominasPage({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
               <thead>
                 <tr>
-                  {["Mes", "Nominas", "Bruto", "Coste empresarial", "SS", "Total", "Imputado"].map(
-                    (label) => (
-                      <th
-                        key={label}
-                        style={{
-                          textAlign: label === "Mes" ? "left" : "right",
-                          borderBottom: "1px solid #ddd",
-                          padding: 8,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {label}
-                      </th>
-                    )
-                  )}
+                  {resumenSortHeader("mes", "Mes", "left")}
+                  {resumenSortHeader("count", "Nóminas")}
+                  {resumenSortHeader("bruto", "Bruto")}
+                  {resumenSortHeader("coste", "Coste empresarial")}
+                  {resumenSortHeader("ss", "SS")}
+                  {resumenSortHeader("total", "Total")}
+                  {resumenSortHeader("imputado", "Imputado")}
                 </tr>
               </thead>
               <tbody>
@@ -1172,6 +1235,31 @@ export default async function NominasPage({
                   ))
                 )}
               </tbody>
+              {resumenMensualRows.length > 0 ? (
+                <tfoot>
+                  <tr style={{ background: "#f8fafc", fontWeight: 800 }}>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8 }}>Totales</td>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8, textAlign: "right" }}>
+                      {resumenMensualTotales.count}
+                    </td>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8, textAlign: "right" }}>
+                      {formatDecimal(resumenMensualTotales.bruto)}
+                    </td>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8, textAlign: "right" }}>
+                      {formatDecimal(resumenMensualTotales.coste)}
+                    </td>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8, textAlign: "right" }}>
+                      {formatDecimal(resumenMensualTotales.ss)}
+                    </td>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8, textAlign: "right" }}>
+                      {formatDecimal(resumenMensualTotales.total)}
+                    </td>
+                    <td style={{ borderTop: "2px solid #ddd", padding: 8, textAlign: "right" }}>
+                      {formatDecimal(resumenMensualTotales.imputado)}
+                    </td>
+                  </tr>
+                </tfoot>
+              ) : null}
             </table>
           </div>
         </div>

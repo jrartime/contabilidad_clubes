@@ -12,7 +12,11 @@ import {
   toDecimalInputValue,
 } from "@/lib/format";
 import { parseDecimalToNumber } from "@/lib/decimal";
-import { asignarProgramaMasivoAction, updateBancoAction } from "./actions";
+import {
+  asignarBancoMasivoAction,
+  type BancoBulkField,
+  updateBancoAction,
+} from "./actions";
 
 type Row = {
   id_banco: number;
@@ -34,17 +38,46 @@ type Row = {
 
 type BancosSortKey = "fecha_operativa" | "detalle" | "debe" | "haber" | "saldo" | "importe";
 
+const BULK_FIELDS: {
+  value: BancoBulkField;
+  label: string;
+  type: "text" | "date" | "integer" | "decimal" | "programa" | "concepto";
+}[] = [
+  { value: "fecha_operativa", label: "Fecha operativa", type: "date" },
+  { value: "fecha_valor", label: "Fecha valor", type: "date" },
+  { value: "detalle", label: "Detalle", type: "text" },
+  { value: "referencia", label: "Referencia", type: "text" },
+  { value: "referencia_1", label: "Referencia 1", type: "text" },
+  { value: "referencia_2", label: "Referencia 2", type: "text" },
+  { value: "categoria", label: "Categoría", type: "text" },
+  { value: "programa_id", label: "Programa", type: "programa" },
+  { value: "concepto_id", label: "Concepto", type: "concepto" },
+  { value: "orden", label: "Orden", type: "integer" },
+  { value: "debe", label: "Debe", type: "decimal" },
+  { value: "haber", label: "Haber", type: "decimal" },
+  { value: "saldo", label: "Saldo", type: "decimal" },
+  { value: "importe", label: "Importe", type: "decimal" },
+];
+
 type FilterParams = {
   programa_id: string | null;
   concepto_id: string;
   fecha_operativa_desde: string;
   fecha_operativa_hasta: string;
+  buscar: string;
   sort: string;
   dir: string;
 };
 
 function money(value: number | null) {
   return value === null || value === undefined ? "-" : formatDecimal(value);
+}
+
+function relatedBancoId(reference: string | null) {
+  const match = /^Relacionado con movimiento bancario #(\d+)$/.exec(
+    String(reference ?? "").trim()
+  );
+  return match ? Number(match[1]) : null;
 }
 
 export default function BancosTable({
@@ -73,7 +106,8 @@ export default function BancosTable({
   // Estado de asignación masiva
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [bulkProgramaId, setBulkProgramaId] = useState<string>("");
+  const [bulkField, setBulkField] = useState<BancoBulkField | "">("");
+  const [bulkValue, setBulkValue] = useState<string>("");
   const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   // Filas con estado local (para reflejar el cambio de programa inmediatamente)
@@ -156,34 +190,59 @@ export default function BancosTable({
   function toggleRow(id: number) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   }
 
   // Ejecutar asignación masiva
   function ejecutarAsignacion() {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || !bulkField) return;
     const ids = Array.from(selectedIds);
-    const programaIdNum = bulkProgramaId ? Number(bulkProgramaId) : null;
-    const programaNombre = programaIdNum
-      ? (programaById.get(programaIdNum) ?? `id ${programaIdNum}`)
-      : "(sin programa)";
+    const config = BULK_FIELDS.find((item) => item.value === bulkField);
+    if (!config) return;
+
+    let parsedValue: string | number | null = bulkValue.trim() || null;
+    let valueLabel = parsedValue === null ? "(vacío)" : String(parsedValue);
+    if (config.type === "integer" && parsedValue !== null) {
+      const integer = Number(parsedValue);
+      if (!Number.isInteger(integer)) {
+        setBulkResult("Error: introduce un número entero válido");
+        return;
+      }
+      parsedValue = integer;
+    } else if (config.type === "decimal" && parsedValue !== null) {
+      const decimal = parseDecimalToNumber(parsedValue);
+      if (decimal === null) {
+        setBulkResult("Error: introduce un importe válido");
+        return;
+      }
+      parsedValue = decimal;
+    } else if (config.type === "programa" && parsedValue !== null) {
+      parsedValue = Number(parsedValue);
+      valueLabel = programaById.get(parsedValue) ?? String(parsedValue);
+    } else if (config.type === "concepto" && parsedValue !== null) {
+      parsedValue = Number(parsedValue);
+      valueLabel = conceptoById.get(parsedValue) ?? String(parsedValue);
+    }
 
     if (!confirm(
-      `¿Asignar el programa "${programaNombre}" a ${ids.length} movimiento(s) seleccionado(s)?`
+      `¿Cambiar ${config.label} a "${valueLabel}" en ${ids.length} movimiento(s) seleccionado(s)?`
     )) return;
 
     startTransition(async () => {
-      const result = await asignarProgramaMasivoAction(ids, programaIdNum);
+      const result = await asignarBancoMasivoAction(ids, bulkField, parsedValue);
       if (result.error) {
         setBulkResult(`Error: ${result.error}`);
       } else {
-        // Actualizar filas localmente
         setRows((prev) =>
           prev.map((r) =>
             selectedIds.has(r.id_banco)
-              ? { ...r, programa_id: programaIdNum }
+              ? { ...r, [bulkField]: parsedValue }
               : r
           )
         );
@@ -197,7 +256,8 @@ export default function BancosTable({
   function cancelarBulk() {
     setBulkMode(false);
     setSelectedIds(new Set());
-    setBulkProgramaId("");
+    setBulkField("");
+    setBulkValue("");
     setBulkResult(null);
   }
 
@@ -236,42 +296,70 @@ export default function BancosTable({
               borderRadius: 8,
               flexWrap: "wrap",
             }}>
-              {/* Seleccionar todos */}
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 650, cursor: "pointer", whiteSpace: "nowrap" }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                  onChange={toggleAll}
-                  style={{ width: 16, height: 16, accentColor: "var(--primary)" }}
-                />
-                {selectedIds.size > 0 ? `${selectedIds.size} seleccionado(s)` : "Seleccionar todos"}
-              </label>
+              <span style={{ fontSize: 13, fontWeight: 650, whiteSpace: "nowrap" }}>
+                {selectedIds.size} seleccionado(s)
+              </span>
 
               <div style={{ width: 1, height: 24, background: "#c3d9f5" }} />
 
-              {/* Selector de programa */}
+              {/* Campo que se modificará */}
               <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 650 }}>
-                <span style={{ whiteSpace: "nowrap" }}>Programa:</span>
+                <span style={{ whiteSpace: "nowrap" }}>Campo:</span>
                 <select
-                  value={bulkProgramaId}
-                  onChange={(e) => setBulkProgramaId(e.currentTarget.value)}
-                  style={{ minWidth: 200, height: 34, padding: "0 8px", fontSize: 13 }}
+                  value={bulkField}
+                  onChange={(e) => {
+                    setBulkField(e.currentTarget.value as BancoBulkField | "");
+                    setBulkValue("");
+                    setBulkResult(null);
+                  }}
+                  style={{ minWidth: 170, height: 34, padding: "0 8px", fontSize: 13 }}
                 >
-                  <option value="">(sin programa)</option>
-                  {programas.map((p) => (
-                    <option key={p.id_programa} value={p.id_programa}>
-                      {p.anio ? `[${p.anio}] ` : ""}{p.programa}
+                  <option value="">Selecciona campo</option>
+                  {BULK_FIELDS.map((field) => (
+                    <option key={field.value} value={field.value}>
+                      {field.label}
                     </option>
                   ))}
                 </select>
               </label>
 
+              {bulkField ? (
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 650 }}>
+                  <span style={{ whiteSpace: "nowrap" }}>Nuevo valor:</span>
+                  {BULK_FIELDS.find((item) => item.value === bulkField)?.type === "programa" ? (
+                    <select value={bulkValue} onChange={(e) => setBulkValue(e.currentTarget.value)} style={{ minWidth: 200, height: 34, padding: "0 8px", fontSize: 13 }}>
+                      <option value="">(sin programa)</option>
+                      {programas.map((p) => (
+                        <option key={p.id_programa} value={p.id_programa}>
+                          {p.anio ? `[${p.anio}] ` : ""}{p.programa}
+                        </option>
+                      ))}
+                    </select>
+                  ) : BULK_FIELDS.find((item) => item.value === bulkField)?.type === "concepto" ? (
+                    <select value={bulkValue} onChange={(e) => setBulkValue(e.currentTarget.value)} style={{ minWidth: 200, height: 34, padding: "0 8px", fontSize: 13 }}>
+                      <option value="">(sin concepto)</option>
+                      {conceptos.map((c) => (
+                        <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={BULK_FIELDS.find((item) => item.value === bulkField)?.type === "date" ? "date" : "text"}
+                      inputMode={["integer", "decimal"].includes(BULK_FIELDS.find((item) => item.value === bulkField)?.type ?? "") ? "decimal" : undefined}
+                      value={bulkValue}
+                      onChange={(e) => setBulkValue(e.currentTarget.value)}
+                      placeholder="Vacío para borrar el valor"
+                      style={{ minWidth: 210, height: 34, padding: "0 8px", fontSize: 13 }}
+                    />
+                  )}
+                </label>
+              ) : null}
+
               {/* Ejecutar */}
               <button
                 type="button"
                 onClick={ejecutarAsignacion}
-                disabled={isPending || selectedIds.size === 0}
+                disabled={isPending || selectedIds.size === 0 || !bulkField}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -279,12 +367,12 @@ export default function BancosTable({
                   padding: "0 16px",
                   height: 34,
                   borderRadius: 6,
-                  background: selectedIds.size > 0 ? "var(--primary)" : "#ccc",
+                  background: selectedIds.size > 0 && bulkField ? "var(--primary)" : "#ccc",
                   color: "#fff",
                   fontSize: 13,
                   fontWeight: 700,
                   border: 0,
-                  cursor: selectedIds.size > 0 ? "pointer" : "not-allowed",
+                  cursor: selectedIds.size > 0 && bulkField ? "pointer" : "not-allowed",
                   minHeight: 34,
                   opacity: isPending ? 0.7 : 1,
                 }}
@@ -325,7 +413,7 @@ export default function BancosTable({
                 <line x1="10" y1="13" x2="21" y2="13" />
                 <line x1="10" y1="19" x2="21" y2="19" />
               </svg>
-              Asignación masiva de programa
+              Asignación masiva
             </button>
           ))}
         </div>
@@ -338,7 +426,19 @@ export default function BancosTable({
             <tr>
               {/* Columna checkbox en modo bulk */}
               {bulkMode && (
-                <th style={{ ...thBase, width: 40, textAlign: "center" }} />
+                <th style={{ ...thBase, width: 40, textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(element) => {
+                      if (element) element.indeterminate = someSelected;
+                    }}
+                    onChange={toggleAll}
+                    aria-label="Seleccionar todos los movimientos visibles"
+                    title="Seleccionar todos los movimientos visibles"
+                    style={{ width: 16, height: 16, accentColor: "var(--primary)", cursor: "pointer" }}
+                  />
+                </th>
               )}
               {!editMode && <th style={{ ...thBase, textAlign: "left", width: 90 }}>Acciones</th>}
               {sortTh("fecha_operativa", "Fecha", { width: 120 })}
@@ -355,6 +455,7 @@ export default function BancosTable({
           <tbody>
             {rows.map((row) => {
               const isSelected = selectedIds.has(row.id_banco);
+              const duplicatedWithId = relatedBancoId(row.referencia_1);
               return (
                 <tr
                   key={row.id_banco}
@@ -398,21 +499,45 @@ export default function BancosTable({
 
                   {/* Fecha operativa */}
                   <td style={{ padding: "6px 8px", borderBottom: "1px solid #eee" }}>
-                    {editMode ? (
-                      <input
-                        type="date"
-                        defaultValue={toDateInputValue(row.fecha_operativa)}
-                        disabled={disabled}
-                        style={fieldStyle}
-                        onBlur={(e) => {
-                          if (disabled) return;
-                          const fecha_operativa = e.currentTarget.value || null;
-                          if (fecha_operativa === (row.fecha_operativa ?? null)) return;
-                          setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, fecha_operativa } : x));
-                          save(row.id_banco, { fecha_operativa });
-                        }}
-                      />
-                    ) : formatDateEs(row.fecha_operativa)}
+                    <div style={{ display: "grid", gap: 4, justifyItems: "start" }}>
+                      {editMode ? (
+                        <input
+                          type="date"
+                          defaultValue={toDateInputValue(row.fecha_operativa)}
+                          disabled={disabled}
+                          style={fieldStyle}
+                          onBlur={(e) => {
+                            if (disabled) return;
+                            const fecha_operativa = e.currentTarget.value || null;
+                            if (fecha_operativa === (row.fecha_operativa ?? null)) return;
+                            setRows((prev) => prev.map((x) => x.id_banco === row.id_banco ? { ...x, fecha_operativa } : x));
+                            save(row.id_banco, { fecha_operativa });
+                          }}
+                        />
+                      ) : formatDateEs(row.fecha_operativa)}
+                      {duplicatedWithId ? (
+                        <span
+                          title={`Relacionado con el movimiento bancario #${duplicatedWithId}`}
+                          aria-label={`Duplicado relacionado con el movimiento bancario ${duplicatedWithId}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            border: "1px solid #bfdbfe",
+                            borderRadius: 999,
+                            background: "#eff6ff",
+                            color: "#1d4ed8",
+                            padding: "1px 6px",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            lineHeight: 1.4,
+                            cursor: "help",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Duplicado
+                        </span>
+                      ) : null}
+                    </div>
                   </td>
 
                   {/* Detalle */}

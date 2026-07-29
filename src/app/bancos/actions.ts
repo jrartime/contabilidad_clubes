@@ -77,11 +77,46 @@ export async function updateBancoAction(payload: {
   if (error) throw new Error(error.message);
 }
 
-export async function asignarProgramaMasivoAction(
+const BANCO_BULK_FIELDS = {
+  fecha_operativa: "date",
+  fecha_valor: "date",
+  detalle: "text",
+  referencia: "text",
+  referencia_1: "text",
+  referencia_2: "text",
+  categoria: "text",
+  programa_id: "integer",
+  concepto_id: "integer",
+  orden: "integer",
+  debe: "decimal",
+  haber: "decimal",
+  saldo: "decimal",
+  importe: "decimal",
+} as const;
+
+export type BancoBulkField = keyof typeof BANCO_BULK_FIELDS;
+
+export async function asignarBancoMasivoAction(
   ids: number[],
-  programaId: number | null
+  field: BancoBulkField,
+  rawValue: string | number | null
 ): Promise<{ updated: number; error?: string }> {
   if (!ids.length) return { updated: 0 };
+  const fieldType = BANCO_BULK_FIELDS[field];
+  if (!fieldType) return { updated: 0, error: "Campo no permitido" };
+
+  let value: string | number | null = rawValue;
+  if (rawValue === null || String(rawValue).trim() === "") {
+    value = null;
+  } else if (fieldType === "integer") {
+    value = toNullableInt(rawValue);
+    if (value === null) return { updated: 0, error: "El nuevo valor no es un número entero válido" };
+  } else if (fieldType === "decimal") {
+    value = toNullableNumber(rawValue);
+    if (value === null) return { updated: 0, error: "El nuevo valor no es un importe válido" };
+  } else {
+    value = String(rawValue).trim() || null;
+  }
 
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
@@ -95,7 +130,7 @@ export async function asignarProgramaMasivoAction(
 
   const { error, count } = await supabase
     .from("bancos")
-    .update({ programa_id: programaId })
+    .update({ [field]: value })
     .eq("club_id", clubId)
     .in("id_banco", ids);
 

@@ -6,6 +6,7 @@ import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import { parseDecimalToNumber } from "@/lib/decimal";
 import {
+  formatDateEs,
   formatDecimal,
   toDateInputValue,
   toDecimalInputValue,
@@ -16,6 +17,8 @@ import { Icon } from "@/components/Icon";
 import { deleteBancoAction } from "./actions";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
+import { SubsidyExecutionSummary } from "@/components/SubsidyExecutionSummary";
+import { getSubsidyExecutionTotals } from "@/lib/subsidyExecution";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -68,8 +71,16 @@ function safeBancoRedirect(value: FormDataEntryValue | null) {
 }
 
 function appendBancoError(redirectTo: string, error: string) {
-  const separator = redirectTo.includes("?") ? "&" : "?";
-  return `${redirectTo}${separator}error=${encodeURIComponent(error)}`;
+  const [pathAndQuery, hash] = redirectTo.split("#", 2);
+  const separator = pathAndQuery.includes("?") ? "&" : "?";
+  return `${pathAndQuery}${separator}error=${encodeURIComponent(error)}${hash ? `#${hash}` : ""}`;
+}
+
+function bancoEditHref(redirectTo: string, id: number) {
+  const url = new URL(redirectTo, "http://localhost");
+  url.searchParams.set("edit", String(id));
+  url.searchParams.delete("panel");
+  return `${url.pathname}${url.search}#form`;
 }
 
 function toIsoDateFromExcel(value: unknown): string | null {
@@ -123,6 +134,7 @@ async function upsertBanco(formData: FormData) {
 
   const clubId = Number(formData.get("club_id"));
   const id = String(formData.get("id_banco") ?? "").trim();
+  const intent = String(formData.get("intent") ?? "save");
   const redirectTo = safeBancoRedirect(formData.get("redirect_to"));
 
   if (!clubId || !Number.isFinite(clubId)) {
@@ -195,6 +207,48 @@ async function upsertBanco(formData: FormData) {
 
   if (error) {
     redirect(appendBancoError(redirectTo, error.message));
+  }
+
+  if (intent === "duplicate" && id) {
+    const originalId = Number(id);
+    const originalReference = `Relacionado con movimiento bancario #${originalId}`;
+    const { data: duplicated, error: duplicateError } = await supabase
+      .from("bancos")
+      .insert({
+        ...payload,
+        referencia_1: originalReference,
+      })
+      .select("id_banco")
+      .single();
+
+    if (duplicateError || !duplicated?.id_banco) {
+      redirect(
+        appendBancoError(
+          bancoEditHref(redirectTo, originalId),
+          duplicateError?.message ?? "No se pudo crear el movimiento duplicado"
+        )
+      );
+    }
+
+    const duplicatedId = Number(duplicated.id_banco);
+    const { error: linkError } = await supabase
+      .from("bancos")
+      .update({
+        referencia_1: `Relacionado con movimiento bancario #${duplicatedId}`,
+      })
+      .eq("club_id", clubId)
+      .eq("id_banco", originalId);
+
+    if (linkError) {
+      await supabase
+        .from("bancos")
+        .delete()
+        .eq("club_id", clubId)
+        .eq("id_banco", duplicatedId);
+      redirect(appendBancoError(bancoEditHref(redirectTo, originalId), linkError.message));
+    }
+
+    redirect(bancoEditHref(redirectTo, duplicatedId));
   }
 
   redirect(redirectTo);
@@ -276,6 +330,7 @@ export default async function BancosPage({
     concepto_id?: string;
     fecha_operativa_desde?: string;
     fecha_operativa_hasta?: string;
+    buscar?: string;
     sort?: string;
     dir?: string;
   }>;
@@ -302,6 +357,7 @@ export default async function BancosPage({
   const hasConceptoFilter = !!conceptoFilterId && Number.isFinite(conceptoFilterId);
   const fechaOperativaDesde = String(sp.fecha_operativa_desde ?? "").trim();
   const fechaOperativaHasta = String(sp.fecha_operativa_hasta ?? "").trim();
+  const buscar = String(sp.buscar ?? "").trim();
   const isProgramaNoneFilter = programaFilter.isNone;
   const programaFilterId = programaFilter.id;
   const hasProgramaFilter =
@@ -318,7 +374,7 @@ export default async function BancosPage({
   // Solo programas activos — filtrará movimientos bancarios de programas dados de baja
   const { data: programas } = await supabase
     .from("programas")
-    .select("id_programa, programa, anio")
+    .select("id_programa, programa, anio, subvencion, fecha_limite")
     .eq("club_id", clubId)
     .eq("activo", true)
     .order("programa", { ascending: true });
@@ -391,7 +447,46 @@ export default async function BancosPage({
     .order("created_at", { ascending: false })
     .limit(2000);
 
-  const rowsAny = (rows ?? []) as any[];
+  const normalizeSearchText = (value: unknown) =>
+    String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("es");
+  const searchTerms = normalizeSearchText(buscar).split(/\s+/).filter(Boolean);
+  const programaNames = new Map(
+    (programas ?? []).map((p: any) => [
+      Number(p.id_programa),
+      `${p.anio ? `[${p.anio}] ` : ""}${p.programa}`,
+    ])
+  );
+  const conceptoNames = new Map(
+    (conceptos ?? []).map((c: any) => [Number(c.id_concepto), c.concepto])
+  );
+  const rowsAny = ((rows ?? []) as any[]).filter((row) => {
+    if (searchTerms.length === 0) return true;
+    const searchable = normalizeSearchText([
+      row.id_banco,
+      row.fecha_operativa,
+      row.fecha_valor,
+      formatDateEs(row.fecha_operativa),
+      formatDateEs(row.fecha_valor),
+      row.detalle,
+      row.referencia,
+      row.referencia_1,
+      row.referencia_2,
+      row.categoria,
+      row.debe,
+      row.haber,
+      row.saldo,
+      row.importe,
+      row.orden,
+      row.programa_id,
+      programaNames.get(Number(row.programa_id)),
+      row.concepto_id,
+      conceptoNames.get(Number(row.concepto_id)),
+    ].join(" "));
+    return searchTerms.every((term) => searchable.includes(term));
+  });
   const { data: filterOptionsRows } = await filterOptionsQ;
   const filterOptionRowsAny = (filterOptionsRows ?? []) as any[];
   const availableProgramaIds = new Set(filterOptionRowsAny.map((r) => Number(r.programa_id)).filter(Number.isFinite));
@@ -399,6 +494,13 @@ export default async function BancosPage({
   const hasAvailableNoPrograma = filterOptionRowsAny.some((r) => r.programa_id == null);
   const filterProgramas = (programas ?? []).filter((p: any) => availableProgramaIds.has(Number(p.id_programa)) || Number(p.id_programa) === programaFilterId);
   const filterConceptos = (conceptos ?? []).filter((c: any) => availableConceptoIds.has(Number(c.id_concepto)) || Number(c.id_concepto) === conceptoFilterId);
+  const programaSeleccionado =
+    hasProgramaFilter && !isProgramaNoneFilter
+      ? (programas ?? []).find((p: any) => Number(p.id_programa) === Number(programaFilterId))
+      : null;
+  const subsidyExecution = programaSeleccionado
+    ? await getSubsidyExecutionTotals(supabase, clubId, Number(programaSeleccionado.id_programa))
+    : null;
 
   let editRow: any =
     editId !== null ? rowsAny.find((r) => Number(r.id_banco) === Number(editId)) : null;
@@ -455,6 +557,7 @@ export default async function BancosPage({
     concepto_id: hasConceptoFilter ? String(conceptoFilterId) : "",
     fecha_operativa_desde: fechaOperativaDesde,
     fecha_operativa_hasta: fechaOperativaHasta,
+    buscar,
     sort: sortKey,
     dir: sortDir,
   };
@@ -716,11 +819,25 @@ export default async function BancosPage({
             <div className="drawer-actions">
               <button
                 type="submit"
+                name="intent"
+                value="save"
                 className="icon-button tooltip-button"
                 aria-label={editRow ? "Guardar cambios" : "Crear movimiento"}
               >
                 <Icon name="save" />
               </button>
+              {editRow ? (
+                <button
+                  type="submit"
+                  name="intent"
+                  value="duplicate"
+                  className="icon-button icon-button-secondary tooltip-button"
+                  aria-label="Guardar y duplicar movimiento"
+                  title="Guardar el original y crear una copia relacionada"
+                >
+                  <Icon name="duplicate" />
+                </button>
+              ) : null}
               <a
                 href={listHref}
                 className="icon-button icon-button-secondary tooltip-button"
@@ -835,6 +952,21 @@ export default async function BancosPage({
 
       <AutoSubmitFilters action="/bancos">
         <label className="filter-field">
+          <span>Buscar en todos los campos</span>
+          <div className="filter-control-row">
+            <input
+              type="search"
+              name="buscar"
+              defaultValue={buscar}
+              placeholder="Fecha, detalle, referencia, importe..."
+              aria-label="Buscar en todos los campos bancarios"
+            />
+            {buscar ? (
+              <Link href={buildFilterHref("/bancos", bancoFilterParams, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link>
+            ) : null}
+          </div>
+        </label>
+        <label className="filter-field">
           <span>Desde</span>
           <div className="filter-control-row">
             <input type="date" name="fecha_operativa_desde" defaultValue={fechaOperativaDesde} />
@@ -864,6 +996,17 @@ export default async function BancosPage({
           </select>
         </label>
       </AutoSubmitFilters>
+
+      {programaSeleccionado && subsidyExecution ? (
+        <SubsidyExecutionSummary
+          programa={programaSeleccionado.programa}
+          anio={programaSeleccionado.anio}
+          subvencion={Number(programaSeleccionado.subvencion ?? 0) || 0}
+          ingresosBanco={subsidyExecution.ingresosBanco}
+          ejecutado={subsidyExecution.ejecutado}
+          fechaLimite={programaSeleccionado.fecha_limite}
+        />
+      ) : null}
 
       <h2 style={{ fontSize: 16, marginTop: 16, marginBottom: 8 }}>
         Movimientos {hasProgramaFilter ? (isProgramaNoneFilter ? "(sin programa)" : `(programa_id: ${programaFilterId})`) : ""} ({rowsAny.length})

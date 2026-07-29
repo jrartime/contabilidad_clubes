@@ -7,6 +7,7 @@ import ContabilidadTable from "./ContabilidadTable";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
+import { FileDropUpload } from "@/components/FileDropUpload";
 import { buildFilterHref } from "@/lib/filters";
 import { normalizeDecimalString } from "@/lib/decimal";
 import {
@@ -950,6 +951,18 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
               >
                 <Icon name="save" />
               </button>
+              {editRow ? (
+                <button
+                  type="submit"
+                  formAction={duplicateAsiento}
+                  formNoValidate
+                  className="icon-button icon-button-secondary tooltip-button"
+                  aria-label="Duplicar asiento"
+                  title="Crear una copia y abrirla para editar"
+                >
+                  <Icon name="duplicate" />
+                </button>
+              ) : null}
               {editRow && (
                 <a
                   href={listHref}
@@ -976,30 +989,12 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         >
           <div style={{ fontSize: 14, fontWeight: 800 }}>Documentos</div>
 
-          <form
+          <FileDropUpload
             action={uploadDocumentosAction}
-            style={{ display: "grid", gap: 6, alignItems: "start" }}
-          >
-            <input type="hidden" name="club_id" value={clubId} />
-            <input
-              type="hidden"
-              name="contabilidad_id"
-              value={editRow.id_contabilidad}
-            />
-            <input type="hidden" name="redirect_to" value={editRedirectHref} />
-            <input
-              type="file"
-              name="documentos"
-              multiple
-              accept="application/pdf,image/jpeg,image/png"
-            />
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              Max 1MB. Tipos permitidos: PDF/JPG/PNG.
-            </div>
-            <button type="submit" style={{ padding: "8px 10px", cursor: "pointer" }}>
-              Subir documentos
-            </button>
-          </form>
+            clubId={clubId}
+            contabilidadId={editRow.id_contabilidad}
+            redirectTo={editRedirectHref}
+          />
 
           {documentos.length > 0 ? (
             <div style={{ display: "grid", gap: 6 }}>
@@ -1327,13 +1322,9 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         categorias={categorias ?? []}
         conceptos={conceptos ?? []}
         programas={programas ?? []}
-        clubId={clubId}
-        programaFilterValue={programaFilterValue}
-        proveedorFilterValue={proveedorFilterValue}
         page={page}
         totalPages={totalPages}
         exportParamsStr={exportParams.toString()}
-        duplicateAsientoAction={duplicateAsiento}
       />
 
       {/* Paginación */}

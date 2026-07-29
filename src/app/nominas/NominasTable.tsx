@@ -194,7 +194,6 @@ export default function NominasTable({
   const programaById = new Map(programaOptions.map((o) => [o.id, o.label]));
   const conceptoById = new Map(conceptoOptions.map((o) => [o.id, o.label]));
   const categoriaById = new Map(categoriaOptions.map((o) => [o.id, o.label]));
-  const entidadById = new Map(entidadOptions.map((o) => [o.id, o.label]));
 
   function save(id_contabilidad: number, patch: Omit<Parameters<typeof updateNominaAction>[0], "id_contabilidad">) {
     startTransition(() => {

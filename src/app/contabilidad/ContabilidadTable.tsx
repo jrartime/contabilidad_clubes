@@ -3,11 +3,10 @@
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { updateContabilidadAction } from "./actions";
 import { parseDecimalToNumber } from "@/lib/decimal";
-import { toDateInputValue, toDecimalInputValue } from "@/lib/format";
+import { formatDateEs, formatDecimal, toDateInputValue, toDecimalInputValue } from "@/lib/format";
 
 type Row = {
   id_contabilidad: number;
@@ -22,6 +21,7 @@ type Row = {
   categoria_id: number | null;
   concepto_id: number | null;
   programa_id: number | null;
+  detalle: string | null;
 };
 
 type Option = { id: number; label: string };
@@ -45,12 +45,8 @@ export default function ContabilidadTable({
   categorias,
   conceptos,
   programas,
-  clubId,
-  programaFilterValue,
-  proveedorFilterValue,
   page,
   exportParamsStr,
-  duplicateAsientoAction,
 }: {
   initialRows: Row[];
   canEdit: boolean;
@@ -60,18 +56,15 @@ export default function ContabilidadTable({
   categorias: { id_categoria: number; categoria: string }[];
   conceptos: { id_concepto: number; concepto: string }[];
   programas: { id_programa: number; programa: string; anio?: number | null }[];
-  clubId: number;
-  programaFilterValue: string | null;
-  proveedorFilterValue: string | null;
   page: number;
   totalPages: number;
   exportParamsStr: string;
-  duplicateAsientoAction: (formData: FormData) => Promise<void>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [sort, setSort] = useState<SortState>({ key: "fecha", direction: "desc" });
+  const [editMode, setEditMode] = useState(false);
 
   const disabled = !canEdit || isPending;
 
@@ -136,6 +129,12 @@ export default function ContabilidadTable({
     id: p.id_programa,
     label: `${p.anio ? `[${p.anio}] ` : ""}${p.programa}`.trim(),
   }));
+  const tipoById = new Map(tipoOptions.map((option) => [option.id, option.label]));
+  const proveedorById = new Map(proveedorOptions.map((option) => [option.id, option.label]));
+  const personalById = new Map(personalOptions.map((option) => [option.id, option.label]));
+  const categoriaById = new Map(categoriaOptions.map((option) => [option.id, option.label]));
+  const conceptoById = new Map(conceptoOptions.map((option) => [option.id, option.label]));
+  const programaById = new Map(programaOptions.map((option) => [option.id, option.label]));
   const sortedRows = React.useMemo(() => {
     const tipoLabelById = new Map((tipos ?? []).map((option) => [option.id_tipo, option.tipo]));
     const proveedorLabelById = new Map(
@@ -151,7 +150,11 @@ export default function ContabilidadTable({
           case "tipo":
             return tipoLabelById.get(Number(row.tipo_id)) ?? "";
           case "proveedor":
-            return proveedorLabelById.get(Number(row.proveedor_id)) ?? "";
+            return (
+              proveedorLabelById.get(Number(row.proveedor_id)) ??
+              personalLabelById.get(Number(row.personal_id)) ??
+              ""
+            );
           case "personal":
             return personalLabelById.get(Number(row.personal_id)) ?? "";
           default:
@@ -181,24 +184,6 @@ export default function ContabilidadTable({
         .then(() => router.refresh())
         .catch((e) => alert(e.message || String(e)));
     });
-  }
-
-  function renderFilterInputs() {
-    return (
-      <>
-        {programaFilterValue ? (
-          <input type="hidden" name="programa_id_filter" value={programaFilterValue} />
-        ) : null}
-        {proveedorFilterValue ? (
-          <input type="hidden" name="proveedor_id_filter" value={proveedorFilterValue} />
-        ) : null}
-        <input
-          type="hidden"
-          name="redirect_to"
-          value={exportParamsStr ? `/contabilidad?${exportParamsStr}` : "/contabilidad"}
-        />
-      </>
-    );
   }
 
   function setSortKey(key: SortKey) {
@@ -237,6 +222,22 @@ export default function ContabilidadTable({
   return (
     <div style={{ overflowX: "auto" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={() => setEditMode((current) => !current)}
+            className={editMode ? "app-action-link" : "app-action-link app-action-link-secondary"}
+            style={{ gap: 8 }}
+          >
+            <svg className="button-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+              <line x1="3" y1="15" x2="21" y2="15" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+            {editMode ? "Salir del modo edición" : "Modo edición (Excel)"}
+          </button>
+        ) : null}
         {isPending && <span style={{ fontSize: 12, opacity: 0.7 }}>Guardando...</span>}
         {!canEdit && (
           <span style={{ fontSize: 12, opacity: 0.7, marginLeft: "auto" }}>
@@ -245,6 +246,80 @@ export default function ContabilidadTable({
         )}
       </div>
 
+      {!editMode ? (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={{ ...headerStyle, width: 90 }}>Acciones</th>
+              {renderSortHeader({ sortKey: "fecha", label: "Fecha", style: { width: 105 } })}
+              {renderSortHeader({ sortKey: "tipo", label: "Tipo", style: { width: 120 } })}
+              {renderSortHeader({ sortKey: "proveedor", label: "Proveedor / personal", style: { minWidth: 170 } })}
+              {renderSortHeader({ sortKey: "numero_factura", label: "Factura / detalle", style: { minWidth: 180 } })}
+              <th style={{ ...headerStyle, minWidth: 150 }}>Programa</th>
+              <th style={{ ...headerStyle, width: 100 }}>Categoría</th>
+              <th style={{ ...headerStyle, minWidth: 130 }}>Concepto</th>
+              {renderSortHeader({ sortKey: "importe_total", label: "Total", style: { width: 100, textAlign: "right" } })}
+              {renderSortHeader({ sortKey: "importe_imputado", label: "Imputado", style: { width: 100, textAlign: "right" } })}
+              {renderSortHeader({ sortKey: "fecha_pago", label: "Pago", style: { width: 105 } })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map((row, index) => (
+              <tr key={row.id_contabilidad} style={index % 2 ? { background: "#f8f8f8" } : undefined}>
+                <td style={tdStyle}>
+                  <div className="row-actions">
+                    {canEdit ? (
+                      <Link
+                        href={(() => {
+                          const params = new URLSearchParams(exportParamsStr);
+                          if (page > 1) params.set("page", String(page));
+                          params.set("edit", String(row.id_contabilidad));
+                          return `/contabilidad?${params.toString()}#form`;
+                        })()}
+                        className="app-action-link"
+                        aria-label="Editar asiento"
+                      >
+                        <Icon name="edit" />
+                      </Link>
+                    ) : null}
+                  </div>
+                </td>
+                <td style={tdStyle}>{formatDateEs(row.fecha)}</td>
+                <td style={tdStyle}>{tipoById.get(Number(row.tipo_id)) ?? "-"}</td>
+                <td style={tdStyle}>
+                  <div style={{ fontWeight: 700 }}>
+                    {proveedorById.get(Number(row.proveedor_id)) ??
+                      personalById.get(Number(row.personal_id)) ??
+                      "-"}
+                  </div>
+                  {row.proveedor_id && row.personal_id ? (
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>
+                      {personalById.get(Number(row.personal_id))}
+                    </div>
+                  ) : null}
+                </td>
+                <td style={tdStyle}>
+                  <div style={{ fontWeight: 700 }}>{row.numero_factura ?? "-"}</div>
+                  {row.detalle ? <div style={{ fontSize: 12, opacity: 0.7 }}>{row.detalle}</div> : null}
+                </td>
+                <td style={tdStyle}>{programaById.get(Number(row.programa_id)) ?? "-"}</td>
+                <td style={tdStyle}>{categoriaById.get(Number(row.categoria_id)) ?? "-"}</td>
+                <td style={tdStyle}>{conceptoById.get(Number(row.concepto_id)) ?? "-"}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{formatDecimal(row.importe_total ?? 0)}</td>
+                <td style={{ ...tdStyle, textAlign: "right" }}>{formatDecimal(row.importe_imputado ?? 0)}</td>
+                <td style={tdStyle}>{formatDateEs(row.fecha_pago)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={11} style={{ padding: 12, opacity: 0.8 }}>
+                  No hay asientos para los filtros seleccionados.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      ) : (
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr>
@@ -594,18 +669,6 @@ export default function ContabilidadTable({
                         Editar
                       </Link>
 
-                      <form action={duplicateAsientoAction}>
-                        <input type="hidden" name="club_id" value={clubId} />
-                        <input type="hidden" name="id_contabilidad" value={r.id_contabilidad} />
-                        {renderFilterInputs()}
-                        <ConfirmSubmitButton
-                          message="Se creara un asiento nuevo duplicando este. Continuar?"
-                          className="icon-button icon-button-secondary tooltip-button"
-                          ariaLabel="Duplicar asiento"
-                        >
-                          <Icon name="duplicate" />
-                        </ConfirmSubmitButton>
-                      </form>
                     </div>
                   </div>
                 </td>
@@ -622,6 +685,7 @@ export default function ContabilidadTable({
           )}
         </tbody>
       </table>
+      )}
     </div>
   );
 }
