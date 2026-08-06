@@ -384,6 +384,7 @@ export default async function BancosPage({
   const { data: conceptos } = await supabase
     .from("conceptos")
     .select("id_concepto, concepto")
+    .eq("club_id", clubId)
     .order("concepto", { ascending: true });
 
   let q = supabase

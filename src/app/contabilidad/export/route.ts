@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
 import { getMyClubRole } from "@/lib/clubRole";
 import { csvEscape, formatCsvNumber } from "@/lib/format";
+import { matchesGlobalSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
   const proveedorIdRaw = url.searchParams.get("proveedor_id");
   const proveedorId = proveedorIdRaw ? Number(proveedorIdRaw) : null;
   const hasProveedorFilter = !!proveedorId && Number.isFinite(proveedorId);
+  const buscar = String(url.searchParams.get("buscar") ?? "").trim();
 
   let q = supabase
     .from("contabilidad")
@@ -46,6 +48,7 @@ export async function GET(req: Request) {
         "fecha_pago",
         "numero_factura",
         "detalle",
+        "observaciones",
         "importe_total",
         "importe_imputado",
         "proveedor:proveedores!contabilidad_proveedor_fk (proveedor)",
@@ -69,7 +72,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const safeRows = rows ?? [];
+  const safeRows = (rows ?? []).filter((r: any) => matchesGlobalSearch(buscar, [JSON.stringify(r)]));
   const totals = safeRows.reduce(
     (acc: { total: number; imputado: number }, r: any) => {
       acc.total += Number(r.importe_total ?? 0) || 0;
@@ -91,6 +94,7 @@ export async function GET(req: Request) {
     "Concepto",
     "Nº factura",
     "Detalle",
+    "Observaciones",
     "Importe total",
     "Importe imputado",
     "Pendiente",
@@ -116,6 +120,7 @@ export async function GET(req: Request) {
         r.concepto_ref?.concepto ?? "",
         r.numero_factura ?? "",
         r.detalle ?? "",
+        r.observaciones ?? "",
         formatCsvNumber(total),
         formatCsvNumber(imputado),
         formatCsvNumber(rowPendiente),
@@ -129,6 +134,7 @@ export async function GET(req: Request) {
   lines.push(
     [
       "TOTAL",
+      "",
       "",
       "",
       "",

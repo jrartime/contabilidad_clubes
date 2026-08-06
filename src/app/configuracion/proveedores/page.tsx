@@ -7,6 +7,7 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
+import { matchesGlobalSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -187,6 +188,7 @@ export default async function ProveedoresPage({
     sort?: string;
     dir?: string;
     incluir_bajas?: string;
+    buscar?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -195,6 +197,7 @@ export default async function ProveedoresPage({
   const isNewPanel = sp.panel === "new";
   const proveedorFilter = String(sp.proveedor ?? "").trim();
   const incluirBajas = sp.incluir_bajas === "1";
+  const buscar = String(sp.buscar ?? "").trim();
   const sortKey = (["proveedor", "cif", "contacto", "telefono", "email"].includes(
     String(sp.sort)
   )
@@ -202,6 +205,7 @@ export default async function ProveedoresPage({
     : "proveedor") as ProveedoresSortKey;
   const sortDirection: SortDirection = sp.dir === "desc" ? "desc" : "asc";
   const listHref = buildFilterHref("/configuracion/proveedores", {
+    buscar,
     proveedor: proveedorFilter,
     incluir_bajas: incluirBajas ? "1" : null,
     sort: sortKey !== "proveedor" ? sortKey : null,
@@ -238,12 +242,13 @@ export default async function ProveedoresPage({
 
   const { data, error } = await proveedoresQuery.limit(1000);
 
-  const rows = (data ?? []) as ProveedorRow[];
+  const rows = ((data ?? []) as ProveedorRow[]).filter((row) => matchesGlobalSearch(buscar, Object.values(row)));
 
   function sortHref(nextSort: ProveedoresSortKey) {
     return buildFilterHref(
       "/configuracion/proveedores",
       {
+        buscar,
         proveedor: proveedorFilter,
         sort: nextSort,
         dir: sortKey === nextSort && sortDirection === "asc" ? "desc" : "asc",
@@ -336,6 +341,7 @@ export default async function ProveedoresPage({
       {/* Filtros */}
       <AutoSubmitFilters action="/configuracion/proveedores">
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "12px 0 16px" }}>
+          <label className="filter-field" style={{ flex: "1 1 260px" }}><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" placeholder="Buscar en todos los campos" defaultValue={buscar} />{buscar ? <Link href={buildFilterHref("/configuracion/proveedores", { proveedor: proveedorFilter, incluir_bajas: incluirBajas ? "1" : null }, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
           <label className="filter-field" style={{ flex: "1 1 200px" }}>
             <span>Proveedor</span>
             <div className="filter-control-row">
@@ -346,7 +352,7 @@ export default async function ProveedoresPage({
                 defaultValue={proveedorFilter}
               />
               <Link
-                href={buildFilterHref("/configuracion/proveedores", { incluir_bajas: incluirBajas ? "1" : null }, ["proveedor"])}
+                href={buildFilterHref("/configuracion/proveedores", { buscar, incluir_bajas: incluirBajas ? "1" : null }, ["proveedor"])}
                 className="filter-reset-button"
                 aria-label="Limpiar proveedor"
               >

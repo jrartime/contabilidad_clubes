@@ -8,6 +8,8 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
+import { matchesGlobalSearch } from "@/lib/search";
+import { conceptoOficial, conceptoPermitido, TIPOS_PROGRAMA } from "@/lib/conceptRules";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,8 +40,9 @@ async function upsertConcepto(formData: FormData) {
     ? await supabase
         .from("conceptos")
         .update({ concepto })
+        .eq("club_id", clubId)
         .eq("id_concepto", Number(id))
-    : await supabase.from("conceptos").insert({ concepto });
+    : await supabase.from("conceptos").insert({ club_id: clubId, concepto });
 
   const redirectTo = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/conceptos";
   if (error) redirect("/configuracion/conceptos?error=" + encodeURIComponent(error.message));
@@ -66,6 +69,7 @@ async function deleteConcepto(formData: FormData) {
   const { error } = await supabase
     .from("conceptos")
     .delete()
+    .eq("club_id", clubId)
     .eq("id_concepto", id);
 
   const redirectTo = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/conceptos";
@@ -81,6 +85,7 @@ export default async function ConceptosPage({
     edit?: string;
     panel?: string;
     concepto?: string;
+    buscar?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -88,7 +93,8 @@ export default async function ConceptosPage({
   const editId = sp.edit ? Number(sp.edit) : null;
   const isNewPanel = sp.panel === "new";
   const conceptoFilter = String(sp.concepto ?? "").trim();
-  const listHref = buildFilterHref("/configuracion/conceptos", { concepto: conceptoFilter }, []);
+  const buscar = String(sp.buscar ?? "").trim();
+  const listHref = buildFilterHref("/configuracion/conceptos", { concepto: conceptoFilter, buscar }, []);
 
   const supabase = await createSupabaseServerClient();
   const user = await getCurrentUser();
@@ -103,6 +109,7 @@ export default async function ConceptosPage({
   let conceptosQuery = supabase
     .from("conceptos")
     .select("id_concepto, concepto")
+    .eq("club_id", clubId)
     .order("concepto", { ascending: true });
 
   if (conceptoFilter) {
@@ -110,7 +117,7 @@ export default async function ConceptosPage({
   }
 
   const { data, error } = await conceptosQuery.limit(1000);
-  const rows = (data ?? []) as ConceptoRow[];
+  const rows = ((data ?? []) as ConceptoRow[]).filter((row) => matchesGlobalSearch(buscar, Object.values(row)));
 
   let editRow: ConceptoRow | null =
     editId !== null
@@ -121,6 +128,7 @@ export default async function ConceptosPage({
     const { data: one } = await supabase
       .from("conceptos")
       .select("id_concepto, concepto")
+      .eq("club_id", clubId)
       .eq("id_concepto", editId)
       .maybeSingle();
     editRow = (one as ConceptoRow | null) ?? null;
@@ -167,6 +175,7 @@ export default async function ConceptosPage({
       {/* Filtros */}
       <AutoSubmitFilters action="/configuracion/conceptos">
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "12px 0 16px" }}>
+          <label className="filter-field" style={{ flex: "1 1 260px" }}><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" placeholder="Buscar en todos los campos" defaultValue={buscar} />{buscar ? <Link href={buildFilterHref("/configuracion/conceptos", { concepto: conceptoFilter }, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
           <label className="filter-field" style={{ flex: "1 1 200px" }}>
             <span>Concepto</span>
             <div className="filter-control-row">
@@ -177,7 +186,7 @@ export default async function ConceptosPage({
                 defaultValue={conceptoFilter}
               />
               <Link
-                href={buildFilterHref("/configuracion/conceptos", {}, ["concepto"])}
+                href={buildFilterHref("/configuracion/conceptos", { buscar }, ["concepto"])}
                 className="filter-reset-button"
                 aria-label="Limpiar concepto"
               >
@@ -279,6 +288,9 @@ export default async function ConceptosPage({
       <h2 style={{ fontSize: 16, marginTop: 16, marginBottom: 8 }}>
         Listado ({rows.length})
       </h2>
+      <p style={{ margin: "-2px 0 10px", fontSize: 12, opacity: 0.7 }}>
+        Los ticks indican si el concepto pertenece al catálogo regulado y para qué tipos de programa está admitido.
+      </p>
 
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -287,6 +299,14 @@ export default async function ConceptosPage({
               <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>
                 Concepto
               </th>
+              <th style={{ textAlign: "center", borderBottom: "1px solid #ddd", padding: 8 }}>
+                En listado
+              </th>
+              {TIPOS_PROGRAMA.map((tipo) => (
+                <th key={tipo.value} style={{ textAlign: "center", borderBottom: "1px solid #ddd", padding: 8 }}>
+                  {tipo.label}
+                </th>
+              ))}
               <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>
                 Acciones
               </th>
@@ -300,6 +320,19 @@ export default async function ConceptosPage({
                   <div style={{ fontWeight: 700 }}>{row.concepto}</div>
                   <span style={{ opacity: 0.55, fontSize: 12 }}>id: {row.id_concepto}</span>
                 </td>
+
+                <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "center", fontSize: 17 }}>
+                  {conceptoOficial(row.concepto) ? <span aria-label="Sí" title="Incluido en el listado">✓</span> : "-"}
+                </td>
+
+                {TIPOS_PROGRAMA.map((tipo) => {
+                  const permitido = conceptoPermitido(tipo.value, row.concepto);
+                  return (
+                    <td key={tipo.value} style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "center", fontSize: 17 }}>
+                      {permitido ? <span aria-label="Sí" title={`Admitido en ${tipo.label}`}>✓</span> : "-"}
+                    </td>
+                  );
+                })}
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
                   {canUserEdit ? (
@@ -323,7 +356,7 @@ export default async function ConceptosPage({
 
             {rows.length === 0 && !error && (
               <tr>
-                <td colSpan={2} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={6} style={{ padding: 12, opacity: 0.8 }}>
                   No hay conceptos.
                 </td>
               </tr>

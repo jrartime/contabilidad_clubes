@@ -12,7 +12,8 @@ import {
   toDecimalInputValue,
 } from "@/lib/format";
 import { parseDecimalToNumber } from "@/lib/decimal";
-import { duplicateNominaAction, updateNominaAction } from "./actions";
+import { asignarNominasMasivoAction, duplicateNominaAction, updateNominaAction } from "./actions";
+import { BulkAssignmentControl, type BulkField } from "@/components/BulkAssignmentControl";
 
 type NominaRow = {
   id_contabilidad: number;
@@ -76,6 +77,8 @@ export default function NominasTable({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editMode, setEditMode] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [rows, setRows] = useState<NominaRow[]>(initialRows);
 
   useEffect(() => { setRows(initialRows); }, [initialRows]);
@@ -194,6 +197,19 @@ export default function NominasTable({
   const programaById = new Map(programaOptions.map((o) => [o.id, o.label]));
   const conceptoById = new Map(conceptoOptions.map((o) => [o.id, o.label]));
   const categoriaById = new Map(categoriaOptions.map((o) => [o.id, o.label]));
+  const bulkFields: BulkField[] = [
+    { value: "fecha", label: "Fecha", type: "date" }, { value: "fecha_pago", label: "Fecha de pago", type: "date" },
+    { value: "personal_id", label: "Personal", type: "select", options: personalOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "proveedor_id", label: "Proveedor", type: "select", options: proveedorOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "programa_id", label: "Programa", type: "select", options: programaOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "categoria_id", label: "Categoría", type: "select", options: categoriaOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "concepto_id", label: "Concepto", type: "select", options: conceptoOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "entidad_id", label: "Entidad", type: "select", options: entidadOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "bruto", label: "Bruto", type: "decimal" }, { value: "coste_empresarial", label: "Coste empresarial", type: "decimal" },
+    { value: "ss", label: "Seguridad Social", type: "decimal" }, { value: "bruto_imputado", label: "Bruto imputado", type: "decimal" },
+    { value: "ss_imputado", label: "SS imputada", type: "decimal" }, { value: "importe_total", label: "Importe total", type: "decimal" },
+    { value: "importe_imputado", label: "Importe imputado", type: "decimal" }, { value: "detalle", label: "Detalle", type: "text" },
+  ];
 
   function save(id_contabilidad: number, patch: Omit<Parameters<typeof updateNominaAction>[0], "id_contabilidad">) {
     startTransition(() => {
@@ -325,10 +341,10 @@ export default function NominasTable({
     <div>
       {/* Toolbar edit mode */}
       {canEdit && (
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginBottom: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => setEditMode((v) => !v)}
+            onClick={() => { setEditMode((v) => !v); setBulkMode(false); setSelectedIds(new Set()); }}
             className={editMode ? "app-action-link" : "app-action-link app-action-link-secondary"}
             style={{ gap: 8 }}
           >
@@ -340,6 +356,11 @@ export default function NominasTable({
             </svg>
             {editMode ? "Salir del modo edición" : "Modo edición (Excel)"}
           </button>
+          {!editMode ? <BulkAssignmentControl active={bulkMode} setActive={(active) => { setBulkMode(active); if (!active) setSelectedIds(new Set()); }} selectedCount={selectedIds.size} fields={bulkFields} onExecute={async (field, value) => {
+            const result = await asignarNominasMasivoAction([...selectedIds], field as any, value);
+            if (!result.error) { setRows((prev) => prev.map((row) => selectedIds.has(row.id_contabilidad) ? { ...row, [field]: value } : row)); setSelectedIds(new Set()); router.refresh(); }
+            return result;
+          }} /> : null}
           {isPending && <span style={{ marginLeft: 12, fontSize: 12, opacity: 0.7 }}>Guardando…</span>}
         </div>
       )}
@@ -348,6 +369,7 @@ export default function NominasTable({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
+              {bulkMode ? <th style={{ ...thBase, width: 42 }}><input type="checkbox" checked={rows.length > 0 && selectedIds.size === rows.length} onChange={() => setSelectedIds(selectedIds.size === rows.length ? new Set() : new Set(rows.map((row) => row.id_contabilidad)))} aria-label="Seleccionar todas las nóminas" /></th> : null}
               {sortTh("fecha", "Fecha", { width: 110 })}
               {sortTh("personal", "Personal", { minWidth: 140 })}
               {sortTh("proveedor", "Proveedor", { minWidth: 140 })}
@@ -370,6 +392,8 @@ export default function NominasTable({
               const alt = idx % 2 === 1 ? { background: "#f9f9f9" } : undefined;
               return (
                 <tr key={r.id_contabilidad} style={alt}>
+
+                  {bulkMode ? <td style={td}><input type="checkbox" checked={selectedIds.has(r.id_contabilidad)} onChange={() => setSelectedIds((current) => { const next = new Set(current); if (next.has(r.id_contabilidad)) next.delete(r.id_contabilidad); else next.add(r.id_contabilidad); return next; })} aria-label={`Seleccionar nómina ${r.id_contabilidad}`} /></td> : null}
 
                   {/* Fecha */}
                   <td style={td}>
@@ -578,7 +602,7 @@ export default function NominasTable({
 
             {rows.length === 0 && (
               <tr>
-                <td colSpan={editMode ? 11 : 12} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={bulkMode ? 13 : editMode ? 11 : 12} style={{ padding: 12, opacity: 0.8 }}>
                   No hay nóminas todavía.
                 </td>
               </tr>

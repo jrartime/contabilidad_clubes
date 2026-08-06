@@ -8,6 +8,7 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
+import { matchesGlobalSearch } from "@/lib/search";
 import NominaForm from "./NominaForm";
 import NominasTable from "./NominasTable";
 import { normalizeDecimalString, parseDecimalToNumber } from "@/lib/decimal";
@@ -330,6 +331,7 @@ export default async function NominasPage({
     resumen?: string;
     resumen_sort?: string;
     resumen_dir?: string;
+    buscar?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -370,6 +372,7 @@ export default async function NominasPage({
   const hasCategoriaFilter = !!categoriaFilterId && Number.isFinite(categoriaFilterId);
   const fechaDesde = String(sp.fecha_desde ?? "").trim();
   const fechaHasta = String(sp.fecha_hasta ?? "").trim();
+  const buscar = String(sp.buscar ?? "").trim();
   const sortKey = ([
     "fecha",
     "personal",
@@ -414,6 +417,7 @@ export default async function NominasPage({
   const conceptosPromise = supabase
     .from("conceptos")
     .select("id_concepto, concepto")
+    .eq("club_id", clubId)
     .order("concepto", { ascending: true });
 
   const entidadesPromise = supabase
@@ -517,7 +521,7 @@ export default async function NominasPage({
   const nominasPromise = q
     .order("fecha", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(500);
+    .limit(2000);
 
   const [
     { data: proveedores },
@@ -537,7 +541,10 @@ export default async function NominasPage({
     filterOptionsPromise,
   ]);
 
-  const rowsAny = (rows ?? []) as any[];
+  const personalSearchNames = new Map((personal ?? []).map((p: any) => [Number(p.id_personal), p.nombre]));
+  const rowsAny = ((rows ?? []) as any[]).filter((row) => matchesGlobalSearch(buscar, [
+    JSON.stringify(row), personalSearchNames.get(Number(row.personal_id)),
+  ]));
   const filterOptionRowsAny = (filterOptionsRows ?? []) as any[];
   const availablePersonalIds = new Set(filterOptionRowsAny.map((r) => Number(r.personal_id)).filter(Number.isFinite));
   const availableProgramaIds = new Set(filterOptionRowsAny.map((r) => Number(r.programa_id)).filter(Number.isFinite));
@@ -716,6 +723,7 @@ export default async function NominasPage({
       : [];
 
   const nominaFilterParams = {
+    buscar,
     fecha_desde: fechaDesde,
     fecha_hasta: fechaHasta,
     personal_id: hasPersonalFilter ? String(personalFilterId) : "",
@@ -1025,6 +1033,7 @@ export default async function NominasPage({
 
       {/* Filtro por programa */}
       <AutoSubmitFilters action="/nominas">
+        <label className="filter-field"><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" defaultValue={buscar} placeholder="Buscar en todos los campos" />{buscar ? <Link href={buildFilterHref("/nominas", nominaFilterParams, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
         {showResumenMensual ? <input type="hidden" name="resumen" value="mensual" /> : null}
         <label className="filter-field">
           <span>Desde</span>

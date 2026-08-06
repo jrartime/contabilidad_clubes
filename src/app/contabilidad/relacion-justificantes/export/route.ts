@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
 import { getMyClubRole } from "@/lib/clubRole";
 import { csvEscape, formatCsvNumber } from "@/lib/format";
+import { matchesGlobalSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
   const proveedor_id_str = url.searchParams.get("proveedor_id");
   const proveedor_id = proveedor_id_str ? Number(proveedor_id_str) : null;
   const hasProveedorFilter = !!proveedor_id && Number.isFinite(proveedor_id);
+  const buscar = String(url.searchParams.get("buscar") ?? "").trim();
 
   let q = supabase
     .from("contabilidad")
@@ -46,6 +48,7 @@ export async function GET(req: Request) {
         "fecha",
         "fecha_pago",
         "importe_imputado",
+        "observaciones",
         "proveedor:proveedores!contabilidad_proveedor_fk (proveedor, cif)",
         "concepto_ref:conceptos!contabilidad_concepto_id_fkey (concepto)",
         "created_at",
@@ -66,7 +69,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const safeRows = rows ?? [];
+  const safeRows = (rows ?? []).filter((r: any) => matchesGlobalSearch(buscar, [JSON.stringify(r)]));
 
   const header = [
     "Nº",
@@ -77,6 +80,7 @@ export async function GET(req: Request) {
     "Fecha pago factura",
     "Importe imputado",
     "Relación con el proyecto subvencionado",
+    "Observaciones",
   ];
 
   const lines: string[] = [];
@@ -97,6 +101,7 @@ export async function GET(req: Request) {
         r.fecha_pago ?? "",
         formatCsvNumber(imputado),
         r.concepto_ref?.concepto ?? "",
+        r.observaciones ?? "",
       ].map(csvEscape).join(";")
     );
   });
@@ -105,6 +110,7 @@ export async function GET(req: Request) {
   lines.push(
     [
       "TOTAL IMPORTE JUSTIFICADO",
+      "",
       "",
       "",
       "",

@@ -7,6 +7,7 @@ import PersonalTable from "./PersonalTable";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
 import { Icon } from "@/components/Icon";
+import { matchesGlobalSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,6 +20,7 @@ export default async function PersonalPage({
     nombre?: string;
     panel?: string;
     incluir_bajas?: string;
+    buscar?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -33,6 +35,7 @@ export default async function PersonalPage({
   const canUserEdit = canEditClubData(role);
   const nombreFilter = String(sp.nombre ?? "").trim();
   const incluirBajas = sp.incluir_bajas === "1";
+  const buscar = String(sp.buscar ?? "").trim();
 
   let personalQuery = supabase
     .from("personal")
@@ -47,7 +50,8 @@ export default async function PersonalPage({
 
   if (nombreFilter) personalQuery = personalQuery.ilike("nombre", `%${nombreFilter}%`);
 
-  const { data: personal, error } = await personalQuery;
+  const { data: personalData, error } = await personalQuery;
+  const personal = (personalData ?? []).filter((row) => matchesGlobalSearch(buscar, Object.values(row)));
 
   if (error) {
     return (
@@ -65,7 +69,7 @@ export default async function PersonalPage({
         <div className="page-toolbar-actions">
           {canUserEdit ? (
             <Link
-              href={buildFilterHref("/configuracion/personal", { nombre: nombreFilter, panel: "new", incluir_bajas: incluirBajas ? "1" : null }, [])}
+              href={buildFilterHref("/configuracion/personal", { buscar, nombre: nombreFilter, panel: "new", incluir_bajas: incluirBajas ? "1" : null }, [])}
               className="icon-button tooltip-button"
               aria-label="Nuevo personal"
             >
@@ -91,6 +95,7 @@ export default async function PersonalPage({
 
       <AutoSubmitFilters action="/configuracion/personal">
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "12px 0 16px" }}>
+          <label className="filter-field" style={{ flex: "1 1 260px" }}><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" placeholder="Buscar en todos los campos" defaultValue={buscar} />{buscar ? <Link href={buildFilterHref("/configuracion/personal", { nombre: nombreFilter, incluir_bajas: incluirBajas ? "1" : null }, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
           <label className="filter-field" style={{ flex: "1 1 200px" }}>
             <span>Nombre</span>
             <div className="filter-control-row">
@@ -101,7 +106,7 @@ export default async function PersonalPage({
                 defaultValue={nombreFilter}
               />
               <Link
-                href={buildFilterHref("/configuracion/personal", { incluir_bajas: incluirBajas ? "1" : null }, ["nombre"])}
+                href={buildFilterHref("/configuracion/personal", { buscar, incluir_bajas: incluirBajas ? "1" : null }, ["nombre"])}
                 className="filter-reset-button"
                 aria-label="Limpiar nombre"
               >

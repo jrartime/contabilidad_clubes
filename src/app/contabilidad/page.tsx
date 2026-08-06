@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import ContabilidadTable from "./ContabilidadTable";
+import { ProgramaConceptoFields } from "./ProgramaConceptoFields";
+import { conceptoPermitido, isTipoPrograma } from "@/lib/conceptRules";
+import { matchesGlobalSearch } from "@/lib/search";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
@@ -77,6 +80,7 @@ async function upsertAsiento(formData: FormData) {
   const importe_total = toNumberFromFormValue(formData.get("importe_total"));
   const importe_imputado = toNumberFromFormValue(formData.get("importe_imputado"));
   const detalle = String(formData.get("detalle") ?? "").trim() || null;
+  const observaciones = String(formData.get("observaciones") ?? "").trim() || null;
 
   if (!clubId || !Number.isFinite(clubId))
     redirect("/contabilidad?error=club_id%20inv%C3%A1lido");
@@ -92,6 +96,16 @@ async function upsertAsiento(formData: FormData) {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
+  if (programa_id && concepto_id) {
+    const [{ data: programa }, { data: concepto }] = await Promise.all([
+      supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programa_id).maybeSingle(),
+      supabase.from("conceptos").select("concepto").eq("club_id", clubId).eq("id_concepto", concepto_id).maybeSingle(),
+    ]);
+    if (!programa || !concepto || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto.concepto)) {
+      redirect("/contabilidad?error=" + encodeURIComponent("El concepto seleccionado no es válido para el tipo de programa."));
+    }
+  }
+
   const payload: any = {
     club_id: clubId,
     tipo_id,
@@ -106,6 +120,7 @@ async function upsertAsiento(formData: FormData) {
     importe_total,
     importe_imputado,
     detalle,
+    observaciones,
   };
 
   const { error } = id
@@ -194,6 +209,7 @@ async function duplicateAsiento(formData: FormData) {
         "importe_total",
         "importe_imputado",
         "detalle",
+        "observaciones",
       ].join(",")
     )
     .eq("club_id", clubId)
@@ -251,6 +267,7 @@ export default async function ContabilidadPage({
     fecha_desde?: string;
     fecha_hasta?: string;
     page?: string;
+    buscar?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -285,6 +302,7 @@ export default async function ContabilidadPage({
   const hasTipoFilter = !!tipoFilterId && Number.isFinite(tipoFilterId);
   const fechaDesde = String(sp.fecha_desde ?? "").trim();
   const fechaHasta = String(sp.fecha_hasta ?? "").trim();
+  const buscar = String(sp.buscar ?? "").trim();
   const PAGE_SIZE = 50;
   const pageRaw = Number(sp.page ?? 1);
   const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.trunc(pageRaw) : 1;
@@ -308,6 +326,7 @@ export default async function ContabilidadPage({
   if (hasTipoFilter) exportParams.set("tipo_id", String(tipoFilterId));
   if (fechaDesde) exportParams.set("fecha_desde", fechaDesde);
   if (fechaHasta) exportParams.set("fecha_hasta", fechaHasta);
+  if (buscar) exportParams.set("buscar", buscar);
   const exportHref = exportParams.toString()
     ? `/contabilidad/export?${exportParams.toString()}`
     : `/contabilidad/export`;
@@ -319,7 +338,7 @@ export default async function ContabilidadPage({
   // Programas primero (solo activos) para poder filtrar la query principal
   const { data: programas } = await supabase
     .from("programas")
-    .select("id_programa, programa, subvencion, fecha_limite, anio")
+    .select("id_programa, programa, subvencion, fecha_limite, anio, tipo_programa")
     .eq("club_id", clubId)
     .eq("activo", true)
     .order("programa", { ascending: true });
@@ -366,6 +385,7 @@ export default async function ContabilidadPage({
   const conceptosPromise = supabase
     .from("conceptos")
     .select("id_concepto, concepto")
+    .eq("club_id", clubId)
     .order("concepto", { ascending: true });
 
   const entidadesPromise = supabase
@@ -403,6 +423,7 @@ export default async function ContabilidadPage({
         "importe_total",
         "importe_imputado",
         "detalle",
+        "observaciones",
         "created_at",
       ].join(",")
     )
@@ -450,10 +471,12 @@ export default async function ContabilidadPage({
   if (fechaHasta) filterOptionsQ = filterOptionsQ.lte("fecha", fechaHasta);
   const filterOptionsPromise = filterOptionsQ;
 
-  const contabilidadPromise = q
+  let contabilidadPromise = q
     .order("fecha", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .range(offset, offset + PAGE_SIZE - 1);
+    .order("created_at", { ascending: false });
+  contabilidadPromise = buscar
+    ? contabilidadPromise.limit(2000)
+    : contabilidadPromise.range(offset, offset + PAGE_SIZE - 1);
 
   // Ingresos de banco para el programa seleccionado (solo cuando hay filtro de programa concreto)
   const bancosIngresosPromise =
@@ -505,8 +528,19 @@ type Tot = { total: number; imputado: number; count: number };
 const categoriasMap = new Map(
   (categorias ?? []).map((c: any) => [Number(c.id_categoria), String(c.categoria ?? "")])
 );
+const tipoSearchMap = new Map((tipos ?? []).map((x: any) => [Number(x.id_tipo), x.tipo]));
+const proveedorSearchMap = new Map((proveedores ?? []).map((x: any) => [Number(x.id_proveedor), x.proveedor]));
+const personalSearchMap = new Map((personal ?? []).map((x: any) => [Number(x.id_personal), x.nombre]));
+const conceptoSearchMap = new Map((conceptos ?? []).map((x: any) => [Number(x.id_concepto), x.concepto]));
+const programaSearchMap = new Map((programas ?? []).map((x: any) => [Number(x.id_programa), `${x.anio ?? ""} ${x.programa}`]));
+const searchedRows = ((rows ?? []) as any[]).filter((row) => matchesGlobalSearch(buscar, [
+  JSON.stringify(row), tipoSearchMap.get(Number(row.tipo_id)), proveedorSearchMap.get(Number(row.proveedor_id)),
+  personalSearchMap.get(Number(row.personal_id)), conceptoSearchMap.get(Number(row.concepto_id)),
+  programaSearchMap.get(Number(row.programa_id)),
+]));
+const totalsSource = buscar ? searchedRows : (totalsRows ?? []);
 
-const totales = (totalsRows ?? []).reduce(
+const totales = totalsSource.reduce(
   (acc, r: any) => {
     const total = Number(r.importe_total ?? 0) || 0;
     const imputado = Number(r.importe_imputado ?? 0) || 0;
@@ -541,7 +575,7 @@ const totales = (totalsRows ?? []).reduce(
   }
 );
 
-const totalCount = totalsRows?.length ?? 0;
+const totalCount = buscar ? searchedRows.length : (totalsRows?.length ?? 0);
 const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
 // ===============================
@@ -562,7 +596,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
 );
 
   // Evitar inferencias raras de TS: trabajamos como any
-  const rowsAny = (rows ?? []) as any[];
+  const rowsAny = buscar ? searchedRows.slice(offset, offset + PAGE_SIZE) : ((rows ?? []) as any[]);
 
   let editRow: any =
     editId !== null
@@ -588,6 +622,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
           "importe_total",
           "importe_imputado",
           "detalle",
+          "observaciones",
           "created_at",
         ].join(",")
       )
@@ -838,22 +873,12 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
                 gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
               }}
             >
-              {/* Concepto */}
-              <label style={labelStyle}>
-                Concepto
-                <select
-                  name="concepto_id"
-                  defaultValue={toSelectValue(editRow?.concepto_id)}
-                  style={compactSelectStyle}
-                >
-                  <option value="">(sin concepto)</option>
-                  {(conceptos ?? []).map((c: any) => (
-                    <option key={c.id_concepto} value={c.id_concepto}>
-                      {c.concepto}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <ProgramaConceptoFields
+                programas={(programas ?? []) as any}
+                conceptos={(conceptos ?? []) as any}
+                programaInicial={editRow?.programa_id}
+                conceptoInicial={editRow?.concepto_id}
+              />
 
               {/* Entidad */}
               <label style={labelStyle}>
@@ -867,23 +892,6 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
                   {(entidades ?? []).map((e: any) => (
                     <option key={e.id_entidad} value={e.id_entidad}>
                       {e.entidad}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {/* Programa */}
-              <label style={labelStyle}>
-                Programa
-                <select
-                  name="programa_id"
-                  defaultValue={toSelectValue(editRow?.programa_id)}
-                  style={compactSelectStyle}
-                >
-                  <option value="">(sin programa)</option>
-                  {(programas ?? []).map((p: any) => (
-                    <option key={p.id_programa} value={p.id_programa}>
-                      {p.anio ? `[${p.anio}] ` : ""}{p.programa}
                     </option>
                   ))}
                 </select>
@@ -940,6 +948,17 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
                 name="detalle"
                 defaultValue={editRow?.detalle ?? ""}
                 style={{ ...compactFieldStyle, width: "100%" }}
+              />
+            </label>
+
+            <label>
+              Observaciones
+              <textarea
+                name="observaciones"
+                defaultValue={editRow?.observaciones ?? ""}
+                placeholder="Indica a qué corresponde exactamente el concepto seleccionado"
+                rows={3}
+                style={{ ...compactFieldStyle, height: "auto", minHeight: 72, lineHeight: 1.4, padding: 8, resize: "vertical" }}
               />
             </label>
 
@@ -1053,6 +1072,8 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
       ) : null}
 
       <AutoSubmitFilters action="/contabilidad" className="filters-grid contabilidad-filters">
+
+        <label className="filter-field"><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" defaultValue={buscar} placeholder="Buscar en todos los campos" />{buscar ? <Link href={buildFilterHref("/contabilidad", exportParams, ["buscar", "page"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
 
         <label className="filter-field filter-field-date">
           <span>Desde</span>

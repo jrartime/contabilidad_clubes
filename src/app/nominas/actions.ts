@@ -6,6 +6,22 @@ import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import { parseDecimalToNumber } from "@/lib/decimal";
+import { asignarContabilidadMasivoAction, type ContabilidadBulkField } from "@/app/contabilidad/actions";
+
+export type NominaBulkField = ContabilidadBulkField | "bruto" | "coste_empresarial" | "ss" | "bruto_imputado" | "ss_imputado";
+
+export async function asignarNominasMasivoAction(ids: number[], field: NominaBulkField, value: string | number | null) {
+  if (["bruto", "coste_empresarial", "ss", "bruto_imputado", "ss_imputado"].includes(field)) {
+    const supabase = await createSupabaseServerClient();
+    const { data: userData } = await supabase.auth.getUser(); if (!userData.user) return { updated: 0, error: "No autenticado" };
+    const clubId = await getActiveClubId(); if (!clubId) return { updated: 0, error: "Club no seleccionado" };
+    if (!canEditClubData(await getMyClubRole(clubId))) return { updated: 0, error: "Sin permisos" };
+    const parsed = value === null || String(value).trim() === "" ? null : toNum(value); if (value !== null && parsed === null) return { updated: 0, error: "Importe no válido" };
+    const { error } = await supabase.from("contabilidad").update({ [field]: parsed }).eq("club_id", clubId).eq("tipo_id", 3).in("id_contabilidad", ids);
+    return error ? { updated: 0, error: error.message } : { updated: ids.length };
+  }
+  return asignarContabilidadMasivoAction(ids, field as ContabilidadBulkField, value);
+}
 
 function toNum(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined) return null;

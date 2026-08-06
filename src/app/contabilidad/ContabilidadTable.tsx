@@ -4,9 +4,11 @@ import React, { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
-import { updateContabilidadAction } from "./actions";
+import { asignarContabilidadMasivoAction, updateContabilidadAction } from "./actions";
+import { BulkAssignmentControl, type BulkField } from "@/components/BulkAssignmentControl";
 import { parseDecimalToNumber } from "@/lib/decimal";
 import { formatDateEs, formatDecimal, toDateInputValue, toDecimalInputValue } from "@/lib/format";
+import { avisoConcepto, conceptoPermitido, type TipoPrograma } from "@/lib/conceptRules";
 
 type Row = {
   id_contabilidad: number;
@@ -22,6 +24,7 @@ type Row = {
   concepto_id: number | null;
   programa_id: number | null;
   detalle: string | null;
+  observaciones: string | null;
 };
 
 type Option = { id: number; label: string };
@@ -55,7 +58,7 @@ export default function ContabilidadTable({
   personal: { id_personal: number; nombre: string }[];
   categorias: { id_categoria: number; categoria: string }[];
   conceptos: { id_concepto: number; concepto: string }[];
-  programas: { id_programa: number; programa: string; anio?: number | null }[];
+  programas: { id_programa: number; programa: string; anio?: number | null; tipo_programa: TipoPrograma }[];
   page: number;
   totalPages: number;
   exportParamsStr: string;
@@ -65,6 +68,8 @@ export default function ContabilidadTable({
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [sort, setSort] = useState<SortState>({ key: "fecha", direction: "desc" });
   const [editMode, setEditMode] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const disabled = !canEdit || isPending;
 
@@ -135,6 +140,25 @@ export default function ContabilidadTable({
   const categoriaById = new Map(categoriaOptions.map((option) => [option.id, option.label]));
   const conceptoById = new Map(conceptoOptions.map((option) => [option.id, option.label]));
   const programaById = new Map(programaOptions.map((option) => [option.id, option.label]));
+  const bulkFields: BulkField[] = [
+    { value: "fecha", label: "Fecha", type: "date" }, { value: "fecha_pago", label: "Fecha de pago", type: "date" },
+    { value: "numero_factura", label: "Nº de factura", type: "text" }, { value: "detalle", label: "Detalle", type: "text" },
+    { value: "observaciones", label: "Observaciones", type: "text" },
+    { value: "tipo_id", label: "Tipo", type: "select", options: tipoOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "proveedor_id", label: "Proveedor", type: "select", options: proveedorOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "personal_id", label: "Personal", type: "select", options: personalOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "programa_id", label: "Programa", type: "select", options: programaOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "categoria_id", label: "Categoría", type: "select", options: categoriaOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "concepto_id", label: "Concepto", type: "select", options: conceptoOptions.map((o) => ({ value: o.id, label: o.label })) },
+    { value: "importe_total", label: "Importe total", type: "decimal" }, { value: "importe_imputado", label: "Importe imputado", type: "decimal" },
+  ];
+  const programaTipoById = new Map(programas.map((p) => [Number(p.id_programa), p.tipo_programa]));
+  const conceptoNombreById = new Map(conceptos.map((c) => [Number(c.id_concepto), c.concepto]));
+  const avisoForRow = (row: Row) => {
+    const tipo = programaTipoById.get(Number(row.programa_id));
+    const concepto = conceptoNombreById.get(Number(row.concepto_id));
+    return tipo && concepto ? avisoConcepto(tipo, concepto) : null;
+  };
   const sortedRows = React.useMemo(() => {
     const tipoLabelById = new Map((tipos ?? []).map((option) => [option.id_tipo, option.tipo]));
     const proveedorLabelById = new Map(
@@ -238,6 +262,11 @@ export default function ContabilidadTable({
             {editMode ? "Salir del modo edición" : "Modo edición (Excel)"}
           </button>
         ) : null}
+        {canEdit && !editMode ? <BulkAssignmentControl active={bulkMode} setActive={(active) => { setBulkMode(active); if (!active) setSelectedIds(new Set()); }} selectedCount={selectedIds.size} fields={bulkFields} onExecute={async (field, value) => {
+          const result = await asignarContabilidadMasivoAction([...selectedIds], field as any, value);
+          if (!result.error) { setRows((prev) => prev.map((row) => selectedIds.has(row.id_contabilidad) ? { ...row, [field]: value } : row)); setSelectedIds(new Set()); router.refresh(); }
+          return result;
+        }} /> : null}
         {isPending && <span style={{ fontSize: 12, opacity: 0.7 }}>Guardando...</span>}
         {!canEdit && (
           <span style={{ fontSize: 12, opacity: 0.7, marginLeft: "auto" }}>
@@ -251,13 +280,14 @@ export default function ContabilidadTable({
           <thead>
             <tr>
               <th style={{ ...headerStyle, width: 90 }}>Acciones</th>
+              {bulkMode ? <th style={{ ...headerStyle, width: 42 }}><input type="checkbox" checked={rows.length > 0 && selectedIds.size === rows.length} onChange={() => setSelectedIds(selectedIds.size === rows.length ? new Set() : new Set(rows.map((row) => row.id_contabilidad)))} aria-label="Seleccionar todos" /></th> : null}
               {renderSortHeader({ sortKey: "fecha", label: "Fecha", style: { width: 105 } })}
               {renderSortHeader({ sortKey: "tipo", label: "Tipo", style: { width: 120 } })}
               {renderSortHeader({ sortKey: "proveedor", label: "Proveedor / personal", style: { minWidth: 170 } })}
               {renderSortHeader({ sortKey: "numero_factura", label: "Factura / detalle", style: { minWidth: 180 } })}
               <th style={{ ...headerStyle, minWidth: 150 }}>Programa</th>
               <th style={{ ...headerStyle, width: 100 }}>Categoría</th>
-              <th style={{ ...headerStyle, minWidth: 130 }}>Concepto</th>
+              <th style={{ ...headerStyle, minWidth: 190 }}>Concepto / observaciones</th>
               {renderSortHeader({ sortKey: "importe_total", label: "Total", style: { width: 100, textAlign: "right" } })}
               {renderSortHeader({ sortKey: "importe_imputado", label: "Imputado", style: { width: 100, textAlign: "right" } })}
               {renderSortHeader({ sortKey: "fecha_pago", label: "Pago", style: { width: 105 } })}
@@ -284,6 +314,7 @@ export default function ContabilidadTable({
                     ) : null}
                   </div>
                 </td>
+                {bulkMode ? <td style={tdStyle}><input type="checkbox" checked={selectedIds.has(row.id_contabilidad)} onChange={() => setSelectedIds((current) => { const next = new Set(current); if (next.has(row.id_contabilidad)) next.delete(row.id_contabilidad); else next.add(row.id_contabilidad); return next; })} aria-label={`Seleccionar asiento ${row.id_contabilidad}`} /></td> : null}
                 <td style={tdStyle}>{formatDateEs(row.fecha)}</td>
                 <td style={tdStyle}>{tipoById.get(Number(row.tipo_id)) ?? "-"}</td>
                 <td style={tdStyle}>
@@ -304,7 +335,11 @@ export default function ContabilidadTable({
                 </td>
                 <td style={tdStyle}>{programaById.get(Number(row.programa_id)) ?? "-"}</td>
                 <td style={tdStyle}>{categoriaById.get(Number(row.categoria_id)) ?? "-"}</td>
-                <td style={tdStyle}>{conceptoById.get(Number(row.concepto_id)) ?? "-"}</td>
+                <td style={tdStyle}>
+                  <div>{conceptoById.get(Number(row.concepto_id)) ?? "-"}</div>
+                  {avisoForRow(row) ? <div role="alert" style={{ fontSize: 12, color: "#b42318", fontWeight: 600 }}>{avisoForRow(row)}</div> : null}
+                  {row.observaciones ? <div style={{ fontSize: 12, opacity: 0.7 }}>{row.observaciones}</div> : null}
+                </td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>{formatDecimal(row.importe_total ?? 0)}</td>
                 <td style={{ ...tdStyle, textAlign: "right" }}>{formatDecimal(row.importe_imputado ?? 0)}</td>
                 <td style={tdStyle}>{formatDateEs(row.fecha_pago)}</td>
@@ -312,7 +347,7 @@ export default function ContabilidadTable({
             ))}
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={11} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={bulkMode ? 12 : 11} style={{ padding: 12, opacity: 0.8 }}>
                   No hay asientos para los filtros seleccionados.
                 </td>
               </tr>
@@ -558,7 +593,7 @@ export default function ContabilidadTable({
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1.6fr 1fr 1.6fr 1fr auto",
+                      gridTemplateColumns: "1.6fr 1fr 1.4fr 1.8fr auto",
                       gap: 10,
                       alignItems: "end",
                     }}
@@ -574,6 +609,13 @@ export default function ContabilidadTable({
                           const v = e.currentTarget.value;
                           const programa_id = v ? Number(v) : null;
                           if (programa_id === (r.programa_id ?? null)) return;
+                          const tipo = programaTipoById.get(Number(programa_id));
+                          const concepto = conceptoNombreById.get(Number(r.concepto_id));
+                          if (tipo && concepto && !conceptoPermitido(tipo, concepto)) {
+                            alert(`El concepto "${concepto}" no es válido para ese programa. Cambia primero el concepto.`);
+                            e.currentTarget.value = r.programa_id ? String(r.programa_id) : "";
+                            return;
+                          }
                           setRows((prev) =>
                             prev.map((x) =>
                               x.id_contabilidad === r.id_contabilidad
@@ -645,12 +687,35 @@ export default function ContabilidadTable({
                         }}
                       >
                         <option value="">(sin concepto)</option>
-                        {conceptoOptions.map((c) => (
+                        {conceptoOptions.filter((c) => {
+                          const tipo = programaTipoById.get(Number(r.programa_id));
+                          return !tipo || conceptoPermitido(tipo, c.label) || c.id === r.concepto_id;
+                        }).map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.label}
                           </option>
                         ))}
                       </select>
+                    </label>
+
+                    <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600 }}>
+                      Observaciones
+                      <input
+                        type="text"
+                        defaultValue={r.observaciones ?? ""}
+                        placeholder="Detalle del concepto"
+                        disabled={disabled}
+                        style={fieldStyle}
+                        onBlur={(e) => {
+                          if (disabled) return;
+                          const observaciones = e.currentTarget.value.trim() || null;
+                          if (observaciones === (r.observaciones ?? null)) return;
+                          setRows((prev) => prev.map((x) =>
+                            x.id_contabilidad === r.id_contabilidad ? { ...x, observaciones } : x
+                          ));
+                          save(r.id_contabilidad, { observaciones });
+                        }}
+                      />
                     </label>
 
                     <div className="row-actions" style={{ justifyContent: "flex-end" }}>

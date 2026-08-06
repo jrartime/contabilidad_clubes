@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import { parseDecimalToNumber } from "@/lib/decimal";
+import { conceptoPermitido, isTipoPrograma } from "@/lib/conceptRules";
 
 const MAX_FILE_SIZE_BYTES = 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
@@ -45,6 +46,7 @@ export async function updateContabilidadAction(payload: {
   personal_id?: number | null;
   categoria_id?: number | null;
   concepto_id?: number | null;
+  observaciones?: string | null;
   programa_id?: number | null;
   importe_total?: string | number | null;
   importe_imputado?: string | number | null;
@@ -59,6 +61,26 @@ export async function updateContabilidadAction(payload: {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
+  if ("programa_id" in payload || "concepto_id" in payload) {
+    const { data: actual } = await supabase
+      .from("contabilidad")
+      .select("programa_id, concepto_id")
+      .eq("club_id", clubId)
+      .eq("id_contabilidad", payload.id_contabilidad)
+      .maybeSingle();
+    const programaId = "programa_id" in payload ? payload.programa_id : actual?.programa_id;
+    const conceptoId = "concepto_id" in payload ? payload.concepto_id : actual?.concepto_id;
+    if (programaId && conceptoId) {
+      const [{ data: programa }, { data: concepto }] = await Promise.all([
+        supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programaId).maybeSingle(),
+        supabase.from("conceptos").select("concepto").eq("club_id", clubId).eq("id_concepto", conceptoId).maybeSingle(),
+      ]);
+      if (!programa || !concepto || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto.concepto)) {
+        throw new Error("El concepto seleccionado no es válido para el tipo de programa.");
+      }
+    }
+  }
+
   const update: any = {};
   if ("fecha" in payload) update.fecha = payload.fecha || null;
   if ("fecha_pago" in payload) update.fecha_pago = payload.fecha_pago || null;
@@ -69,6 +91,8 @@ export async function updateContabilidadAction(payload: {
   if ("personal_id" in payload) update.personal_id = payload.personal_id ?? null;
   if ("categoria_id" in payload) update.categoria_id = payload.categoria_id ?? null;
   if ("concepto_id" in payload) update.concepto_id = payload.concepto_id ?? null;
+  if ("observaciones" in payload)
+    update.observaciones = (payload.observaciones ?? "").trim() || null;
   if ("programa_id" in payload) update.programa_id = payload.programa_id ?? null;
 
   if ("importe_total" in payload) {
@@ -94,6 +118,44 @@ export async function updateContabilidadAction(payload: {
     .eq("id_contabilidad", payload.id_contabilidad);
 
   if (error) throw new Error(error.message);
+}
+
+const CONTABILIDAD_BULK_FIELDS = {
+  fecha: "date", fecha_pago: "date", numero_factura: "text", detalle: "text", observaciones: "text",
+  tipo_id: "integer", proveedor_id: "integer", personal_id: "integer", categoria_id: "integer",
+  concepto_id: "integer", programa_id: "integer", importe_total: "decimal", importe_imputado: "decimal",
+} as const;
+export type ContabilidadBulkField = keyof typeof CONTABILIDAD_BULK_FIELDS;
+
+export async function asignarContabilidadMasivoAction(ids: number[], field: ContabilidadBulkField, rawValue: string | number | null) {
+  if (!ids.length || !CONTABILIDAD_BULK_FIELDS[field]) return { updated: 0, error: "Campo no permitido" };
+  const supabase = await createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return { updated: 0, error: "No autenticado" };
+  const clubId = await getActiveClubId();
+  if (!clubId) return { updated: 0, error: "Club no seleccionado" };
+  if (!canEditClubData(await getMyClubRole(clubId))) return { updated: 0, error: "Sin permisos" };
+  const type = CONTABILIDAD_BULK_FIELDS[field];
+  let value: string | number | null = rawValue === null || String(rawValue).trim() === "" ? null : rawValue;
+  if (value !== null && type === "integer") { value = Number(value); if (!Number.isInteger(value)) return { updated: 0, error: "Valor entero no válido" }; }
+  if (value !== null && type === "decimal") { value = typeof value === "number" ? value : parseDecimalToNumber(value); if (value === null) return { updated: 0, error: "Importe no válido" }; }
+  if (value !== null && (type === "text" || type === "date")) value = String(value).trim();
+
+  if (field === "programa_id" || field === "concepto_id") {
+    const { data: selected } = await supabase.from("contabilidad").select("id_contabilidad, programa_id, concepto_id").eq("club_id", clubId).in("id_contabilidad", ids);
+    const programIds = new Set<number>(); const conceptIds = new Set<number>();
+    for (const row of selected ?? []) { const p = field === "programa_id" ? value : row.programa_id; const c = field === "concepto_id" ? value : row.concepto_id; if (p && c) { programIds.add(Number(p)); conceptIds.add(Number(c)); } }
+    if (programIds.size && conceptIds.size) {
+      const [{ data: ps }, { data: cs }] = await Promise.all([
+        supabase.from("programas").select("id_programa, tipo_programa").eq("club_id", clubId).in("id_programa", [...programIds]),
+        supabase.from("conceptos").select("id_concepto, concepto").eq("club_id", clubId).in("id_concepto", [...conceptIds]),
+      ]);
+      const pm = new Map((ps ?? []).map((x: any) => [Number(x.id_programa), x.tipo_programa])); const cm = new Map((cs ?? []).map((x: any) => [Number(x.id_concepto), x.concepto]));
+      for (const row of selected ?? []) { const p = Number(field === "programa_id" ? value : row.programa_id); const c = Number(field === "concepto_id" ? value : row.concepto_id); const tipo = pm.get(p); const concepto = cm.get(c); if (p && c && (!isTipoPrograma(tipo) || !concepto || !conceptoPermitido(tipo, concepto))) return { updated: 0, error: "La asignación produciría una combinación programa–concepto no válida" }; }
+    }
+  }
+  const { error } = await supabase.from("contabilidad").update({ [field]: value }).eq("club_id", clubId).in("id_contabilidad", ids);
+  return error ? { updated: 0, error: error.message } : { updated: ids.length };
 }
 
 export async function uploadDocumentosAction(formData: FormData) {

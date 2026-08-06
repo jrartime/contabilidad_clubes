@@ -14,6 +14,8 @@ import {
   toDecimalInputValue,
 } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isTipoPrograma, TIPOS_PROGRAMA, type TipoPrograma } from "@/lib/conceptRules";
+import { matchesGlobalSearch } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,6 +27,7 @@ type ProgramaRow = {
   subvencion: number | null;
   fecha_limite: string | null;
   activo: boolean;
+  tipo_programa: TipoPrograma;
 };
 
 type ProgramaPayload = {
@@ -33,6 +36,7 @@ type ProgramaPayload = {
   anio: number | null;
   subvencion: number | null;
   fecha_limite: string | null;
+  tipo_programa: TipoPrograma;
 };
 
 type ProgramasSortKey = "anio" | "programa" | "subvencion" | "fecha_limite";
@@ -73,6 +77,8 @@ async function upsertPrograma(formData: FormData) {
 
   const programa = String(formData.get("programa") ?? "").trim();
   if (!programa) redirect("/configuracion/programas?error=Programa%20obligatorio");
+  const tipoProgramaRaw = String(formData.get("tipo_programa") ?? "");
+  if (!isTipoPrograma(tipoProgramaRaw)) redirect("/configuracion/programas?error=Tipo%20de%20programa%20invalido");
 
   const payload: ProgramaPayload = {
     club_id: clubId,
@@ -80,6 +86,7 @@ async function upsertPrograma(formData: FormData) {
     anio: parseOptionalYear(formData.get("anio")),
     subvencion: parseDecimalToNumber(formData.get("subvencion")),
     fecha_limite: parseOptionalDate(formData.get("fecha_limite")),
+    tipo_programa: tipoProgramaRaw,
   };
 
   const supabase = await createSupabaseServerClient();
@@ -191,6 +198,7 @@ export default async function ProgramasPage({
     sort?: string;
     dir?: string;
     incluir_bajas?: string;
+    buscar?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -200,6 +208,7 @@ export default async function ProgramasPage({
   const anioFilter = String(sp.anio ?? "").trim();
   const programaFilter = String(sp.programa ?? "").trim();
   const incluirBajas = sp.incluir_bajas === "1";
+  const buscar = String(sp.buscar ?? "").trim();
   const sortKey = (["anio", "programa", "subvencion", "fecha_limite"].includes(
     String(sp.sort)
   )
@@ -220,14 +229,14 @@ export default async function ProgramasPage({
   // Para el select de año usamos todos los programas (activos + baja) para no perder opciones de filtro
   const { data: programasForFilter } = await supabase
     .from("programas")
-    .select("id_programa, programa, anio, subvencion, fecha_limite, activo")
+    .select("id_programa, programa, anio, subvencion, fecha_limite, activo, tipo_programa")
     .eq("club_id", clubId)
     .order("anio", { ascending: false, nullsFirst: false })
     .order("programa", { ascending: true });
 
   let programasQuery = supabase
     .from("programas")
-    .select("id_programa, programa, anio, subvencion, fecha_limite, activo")
+    .select("id_programa, programa, anio, subvencion, fecha_limite, activo, tipo_programa")
     .eq("club_id", clubId)
     .order(programasSortColumns[sortKey], {
       ascending: sortDirection === "asc",
@@ -240,7 +249,10 @@ export default async function ProgramasPage({
   if (programaFilter) programasQuery = programasQuery.ilike("programa", `%${programaFilter}%`);
 
   const { data, error } = await programasQuery.limit(1000);
-  const rows = (data ?? []) as ProgramaRow[];
+  const rows = ((data ?? []) as ProgramaRow[]).filter((row) => matchesGlobalSearch(buscar, [
+    ...Object.values(row),
+    TIPOS_PROGRAMA.find((tipo) => tipo.value === row.tipo_programa)?.label,
+  ]));
 
   const activosCount = rows.filter((r) => r.activo).length;
   const bajasCount = rows.filter((r) => !r.activo).length;
@@ -249,6 +261,7 @@ export default async function ProgramasPage({
     return buildFilterHref(
       "/configuracion/programas",
       {
+        buscar,
         anio: anioFilter,
         programa: programaFilter,
         sort: nextSort,
@@ -277,7 +290,7 @@ export default async function ProgramasPage({
   if (editId && !editRow) {
     const { data: one } = await supabase
       .from("programas")
-      .select("id_programa, programa, anio, subvencion, fecha_limite, activo")
+      .select("id_programa, programa, anio, subvencion, fecha_limite, activo, tipo_programa")
       .eq("club_id", clubId)
       .eq("id_programa", editId)
       .maybeSingle();
@@ -287,7 +300,7 @@ export default async function ProgramasPage({
   const isDrawerOpen = canUserEdit && (isNewPanel || !!editRow);
   const listHref = buildFilterHref(
     "/configuracion/programas",
-    { anio: anioFilter, programa: programaFilter, sort: sortKey, dir: sortDirection, incluir_bajas: incluirBajas ? "1" : null },
+    { buscar, anio: anioFilter, programa: programaFilter, sort: sortKey, dir: sortDirection, incluir_bajas: incluirBajas ? "1" : null },
     []
   );
 
@@ -298,7 +311,7 @@ export default async function ProgramasPage({
         <div className="page-toolbar-actions">
           {canUserEdit ? (
             <Link
-              href={buildFilterHref("/configuracion/programas", { anio: anioFilter, programa: programaFilter, sort: sortKey, dir: sortDirection, panel: "new", incluir_bajas: incluirBajas ? "1" : null }, [])}
+              href={buildFilterHref("/configuracion/programas", { buscar, anio: anioFilter, programa: programaFilter, sort: sortKey, dir: sortDirection, panel: "new", incluir_bajas: incluirBajas ? "1" : null }, [])}
               className="icon-button tooltip-button"
               aria-label="Nuevo programa"
             >
@@ -316,6 +329,7 @@ export default async function ProgramasPage({
       {error && <p>Error: {error.message}</p>}
 
       <AutoSubmitFilters action="/configuracion/programas">
+        <label className="filter-field" style={{ flex: "1 1 260px" }}><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" placeholder="Buscar en todos los campos" defaultValue={buscar} />{buscar ? <Link href={buildFilterHref("/configuracion/programas", { anio: anioFilter, programa: programaFilter, incluir_bajas: incluirBajas ? "1" : null }, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
         <input type="hidden" name="sort" value={sortKey} />
         <input type="hidden" name="dir" value={sortDirection} />
 
@@ -342,7 +356,7 @@ export default async function ProgramasPage({
                 defaultValue={programaFilter}
               />
               <Link
-                href={buildFilterHref("/configuracion/programas", { anio: anioFilter, sort: sortKey, dir: sortDirection, incluir_bajas: incluirBajas ? "1" : null }, ["programa"])}
+                href={buildFilterHref("/configuracion/programas", { buscar, anio: anioFilter, sort: sortKey, dir: sortDirection, incluir_bajas: incluirBajas ? "1" : null }, ["programa"])}
                 className="filter-reset-button"
                 aria-label="Limpiar programa"
               >X</Link>
@@ -411,6 +425,13 @@ export default async function ProgramasPage({
               <label>
                 Programa
                 <input name="programa" required defaultValue={editRow?.programa ?? ""} style={{ width: "100%" }} />
+              </label>
+
+              <label>
+                Tipo de programa
+                <select name="tipo_programa" required defaultValue={editRow?.tipo_programa ?? "clubes"} style={{ width: "100%" }}>
+                  {TIPOS_PROGRAMA.map((tipo) => <option key={tipo.value} value={tipo.value}>{tipo.label}</option>)}
+                </select>
               </label>
 
               <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
@@ -501,6 +522,7 @@ export default async function ProgramasPage({
             <tr>
               {sortHeader("anio", "Año", 90)}
               {sortHeader("programa", "Programa")}
+              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>Tipo</th>
               {sortHeader("subvencion", "Subvención", 140)}
               {sortHeader("fecha_limite", "Fecha límite", 150)}
               <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8, whiteSpace: "nowrap", width: 110 }}>
@@ -526,13 +548,14 @@ export default async function ProgramasPage({
                     )}
                   </div>
                 </td>
+                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{TIPOS_PROGRAMA.find((tipo) => tipo.value === row.tipo_programa)?.label ?? row.tipo_programa}</td>
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{formatMoney(row.subvencion)}</td>
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>{formatDateEs(row.fecha_limite)}</td>
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
                   {canUserEdit ? (
                     <div className="row-actions">
                       <Link
-                        href={buildFilterHref("/configuracion/programas", { anio: anioFilter, programa: programaFilter, sort: sortKey, dir: sortDirection, edit: row.id_programa, incluir_bajas: incluirBajas ? "1" : null }, [])}
+                        href={buildFilterHref("/configuracion/programas", { buscar, anio: anioFilter, programa: programaFilter, sort: sortKey, dir: sortDirection, edit: row.id_programa, incluir_bajas: incluirBajas ? "1" : null }, [])}
                         className="app-action-link"
                         style={{ gap: 6 }}
                         aria-label="Editar programa"
