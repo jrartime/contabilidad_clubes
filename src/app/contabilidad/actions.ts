@@ -64,7 +64,7 @@ export async function updateContabilidadAction(payload: {
   if ("programa_id" in payload || "concepto_id" in payload) {
     const { data: actual } = await supabase
       .from("contabilidad")
-      .select("programa_id, concepto_id")
+      .select("programa_id, concepto_id, entidad_id, observaciones")
       .eq("club_id", clubId)
       .eq("id_contabilidad", payload.id_contabilidad)
       .maybeSingle();
@@ -73,11 +73,13 @@ export async function updateContabilidadAction(payload: {
     if (programaId && conceptoId) {
       const [{ data: programa }, { data: concepto }] = await Promise.all([
         supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programaId).maybeSingle(),
-        supabase.from("conceptos").select("concepto").eq("club_id", clubId).eq("id_concepto", conceptoId).maybeSingle(),
+        supabase.from("conceptos").select("concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, requisito_entidad_origen, requisito_descripcion").eq("club_id", clubId).eq("id_concepto", conceptoId).maybeSingle(),
       ]);
-      if (!programa || !concepto || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto.concepto)) {
+      if (!programa || !concepto || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto)) {
         throw new Error("El concepto seleccionado no es válido para el tipo de programa.");
       }
+      if (concepto.requisito_entidad_origen === "obligatoria" && !actual?.entidad_id) throw new Error("Este concepto requiere indicar la entidad de origen.");
+      if (concepto.requisito_descripcion === "obligatoria" && !actual?.observaciones) throw new Error("Este concepto requiere una descripción en observaciones.");
     }
   }
 
@@ -148,9 +150,9 @@ export async function asignarContabilidadMasivoAction(ids: number[], field: Cont
     if (programIds.size && conceptIds.size) {
       const [{ data: ps }, { data: cs }] = await Promise.all([
         supabase.from("programas").select("id_programa, tipo_programa").eq("club_id", clubId).in("id_programa", [...programIds]),
-        supabase.from("conceptos").select("id_concepto, concepto").eq("club_id", clubId).in("id_concepto", [...conceptIds]),
+        supabase.from("conceptos").select("id_concepto, concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad").eq("club_id", clubId).in("id_concepto", [...conceptIds]),
       ]);
-      const pm = new Map((ps ?? []).map((x: any) => [Number(x.id_programa), x.tipo_programa])); const cm = new Map((cs ?? []).map((x: any) => [Number(x.id_concepto), x.concepto]));
+      const pm = new Map((ps ?? []).map((x: any) => [Number(x.id_programa), x.tipo_programa])); const cm = new Map((cs ?? []).map((x: any) => [Number(x.id_concepto), x]));
       for (const row of selected ?? []) { const p = Number(field === "programa_id" ? value : row.programa_id); const c = Number(field === "concepto_id" ? value : row.concepto_id); const tipo = pm.get(p); const concepto = cm.get(c); if (p && c && (!isTipoPrograma(tipo) || !concepto || !conceptoPermitido(tipo, concepto))) return { updated: 0, error: "La asignación produciría una combinación programa–concepto no válida" }; }
     }
   }

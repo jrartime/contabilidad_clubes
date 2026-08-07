@@ -23,7 +23,12 @@ with conceptos_oficiales(concepto) as (
     ('Imprenta'),
     ('Publicidad y propaganda'),
     ('Local o sede del club'),
-    ('Otros')
+    ('Otros gastos'),
+    ('Subvención del Ayuntamiento de Oviedo'),
+    ('Aportaciones y/o subvenciones de otras Administraciones Públicas'),
+    ('Aportaciones privadas'),
+    ('Recursos propios'),
+    ('Otros ingresos')
 ),
 usos_contabilidad as (
   select concepto_id, count(*) as usos

@@ -96,13 +96,20 @@ async function upsertAsiento(formData: FormData) {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  if (programa_id && concepto_id) {
-    const [{ data: programa }, { data: concepto }] = await Promise.all([
-      supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programa_id).maybeSingle(),
-      supabase.from("conceptos").select("concepto").eq("club_id", clubId).eq("id_concepto", concepto_id).maybeSingle(),
-    ]);
-    if (!programa || !concepto || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto.concepto)) {
+  if (concepto_id) {
+    const { data: concepto } = await supabase.from("conceptos").select("concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, requisito_entidad_origen, requisito_descripcion").eq("club_id", clubId).eq("id_concepto", concepto_id).maybeSingle();
+    if (!concepto) redirect("/contabilidad?error=" + encodeURIComponent("Concepto no válido."));
+    if (programa_id) {
+      const { data: programa } = await supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programa_id).maybeSingle();
+      if (!programa || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto)) {
       redirect("/contabilidad?error=" + encodeURIComponent("El concepto seleccionado no es válido para el tipo de programa."));
+      }
+    }
+    if (concepto.requisito_entidad_origen === "obligatoria" && !entidad_id) {
+      redirect("/contabilidad?error=" + encodeURIComponent("Este concepto requiere indicar la entidad de origen."));
+    }
+    if (concepto.requisito_descripcion === "obligatoria" && !observaciones) {
+      redirect("/contabilidad?error=" + encodeURIComponent("Este concepto requiere una descripción adicional en observaciones."));
     }
   }
 
@@ -384,7 +391,7 @@ export default async function ContabilidadPage({
 
   const conceptosPromise = supabase
     .from("conceptos")
-    .select("id_concepto, concepto")
+    .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion")
     .eq("club_id", clubId)
     .order("concepto", { ascending: true });
 

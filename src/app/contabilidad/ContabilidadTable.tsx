@@ -8,7 +8,7 @@ import { asignarContabilidadMasivoAction, updateContabilidadAction } from "./act
 import { BulkAssignmentControl, type BulkField } from "@/components/BulkAssignmentControl";
 import { parseDecimalToNumber } from "@/lib/decimal";
 import { formatDateEs, formatDecimal, toDateInputValue, toDecimalInputValue } from "@/lib/format";
-import { avisoConcepto, conceptoPermitido, type TipoPrograma } from "@/lib/conceptRules";
+import { avisoConcepto, conceptoPermitido, type ConceptoConfigurable, type TipoPrograma } from "@/lib/conceptRules";
 
 type Row = {
   id_contabilidad: number;
@@ -57,7 +57,7 @@ export default function ContabilidadTable({
   proveedores: { id_proveedor: number; proveedor: string }[];
   personal: { id_personal: number; nombre: string }[];
   categorias: { id_categoria: number; categoria: string }[];
-  conceptos: { id_concepto: number; concepto: string }[];
+  conceptos: (ConceptoConfigurable & { id_concepto: number })[];
   programas: { id_programa: number; programa: string; anio?: number | null; tipo_programa: TipoPrograma }[];
   page: number;
   totalPages: number;
@@ -153,10 +153,10 @@ export default function ContabilidadTable({
     { value: "importe_total", label: "Importe total", type: "decimal" }, { value: "importe_imputado", label: "Importe imputado", type: "decimal" },
   ];
   const programaTipoById = new Map(programas.map((p) => [Number(p.id_programa), p.tipo_programa]));
-  const conceptoNombreById = new Map(conceptos.map((c) => [Number(c.id_concepto), c.concepto]));
+  const conceptoConfigById = new Map(conceptos.map((c) => [Number(c.id_concepto), c]));
   const avisoForRow = (row: Row) => {
     const tipo = programaTipoById.get(Number(row.programa_id));
-    const concepto = conceptoNombreById.get(Number(row.concepto_id));
+    const concepto = conceptoConfigById.get(Number(row.concepto_id));
     return tipo && concepto ? avisoConcepto(tipo, concepto) : null;
   };
   const sortedRows = React.useMemo(() => {
@@ -610,9 +610,9 @@ export default function ContabilidadTable({
                           const programa_id = v ? Number(v) : null;
                           if (programa_id === (r.programa_id ?? null)) return;
                           const tipo = programaTipoById.get(Number(programa_id));
-                          const concepto = conceptoNombreById.get(Number(r.concepto_id));
+                          const concepto = conceptoConfigById.get(Number(r.concepto_id));
                           if (tipo && concepto && !conceptoPermitido(tipo, concepto)) {
-                            alert(`El concepto "${concepto}" no es válido para ese programa. Cambia primero el concepto.`);
+                            alert(`El concepto "${concepto.concepto}" no es válido para ese programa. Cambia primero el concepto.`);
                             e.currentTarget.value = r.programa_id ? String(r.programa_id) : "";
                             return;
                           }
@@ -689,7 +689,8 @@ export default function ContabilidadTable({
                         <option value="">(sin concepto)</option>
                         {conceptoOptions.filter((c) => {
                           const tipo = programaTipoById.get(Number(r.programa_id));
-                          return !tipo || conceptoPermitido(tipo, c.label) || c.id === r.concepto_id;
+                          const config = conceptoConfigById.get(c.id);
+                          return !tipo || (config ? conceptoPermitido(tipo, config) : false) || c.id === r.concepto_id;
                         }).map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.label}

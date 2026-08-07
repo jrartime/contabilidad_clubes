@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/server";
@@ -9,7 +10,7 @@ import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
 import { matchesGlobalSearch } from "@/lib/search";
-import { conceptoOficial, conceptoPermitido, TIPOS_PROGRAMA } from "@/lib/conceptRules";
+import { TIPOS_PROGRAMA } from "@/lib/conceptRules";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,13 +18,35 @@ export const revalidate = 0;
 type ConceptoRow = {
   id_concepto: number;
   concepto: string;
+  en_listado: boolean;
+  valido_clubes: boolean;
+  valido_eventos: boolean;
+  valido_eedd_ctd_discapacidad: boolean;
+  naturaleza: "gasto" | "ingreso";
+  codigo_interno: string | null;
+  requisito_entidad_origen: "no" | "opcional" | "obligatoria";
+  requisito_descripcion: "no" | "opcional" | "obligatoria";
 };
+
+type ConceptosSortKey = "concepto" | "naturaleza" | "en_listado" | "valido_clubes" | "valido_eventos" | "valido_eedd_ctd_discapacidad";
+type SortDirection = "asc" | "desc";
 
 async function upsertConcepto(formData: FormData) {
   "use server";
 
   const id = String(formData.get("id_concepto") ?? "").trim();
   const concepto = String(formData.get("concepto") ?? "").trim();
+  const checks = {
+    en_listado: formData.get("en_listado") === "on",
+    valido_clubes: formData.get("valido_clubes") === "on",
+    valido_eventos: formData.get("valido_eventos") === "on",
+    valido_eedd_ctd_discapacidad: formData.get("valido_eedd_ctd_discapacidad") === "on",
+  };
+  const naturaleza = formData.get("naturaleza") === "ingreso" ? "ingreso" : "gasto";
+  const codigo_interno = String(formData.get("codigo_interno") ?? "").trim() || null;
+  const requisito_entidad_origen = String(formData.get("requisito_entidad_origen") ?? "no");
+  const requisito_descripcion = String(formData.get("requisito_descripcion") ?? "opcional");
+  const metadata = { naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion };
   if (!concepto) redirect("/configuracion/conceptos?error=Concepto%20obligatorio");
 
   const supabase = await createSupabaseServerClient();
@@ -39,10 +62,10 @@ async function upsertConcepto(formData: FormData) {
   const { error } = id
     ? await supabase
         .from("conceptos")
-        .update({ concepto })
+        .update({ concepto, ...checks, ...metadata })
         .eq("club_id", clubId)
         .eq("id_concepto", Number(id))
-    : await supabase.from("conceptos").insert({ club_id: clubId, concepto });
+    : await supabase.from("conceptos").insert({ club_id: clubId, concepto, ...checks, ...metadata });
 
   const redirectTo = String(formData.get("redirect_to") ?? "").trim() || "/configuracion/conceptos";
   if (error) redirect("/configuracion/conceptos?error=" + encodeURIComponent(error.message));
@@ -86,6 +109,8 @@ export default async function ConceptosPage({
     panel?: string;
     concepto?: string;
     buscar?: string;
+    sort?: string;
+    dir?: string;
   }>;
 }) {
   const sp = (await searchParams) ?? {};
@@ -94,7 +119,10 @@ export default async function ConceptosPage({
   const isNewPanel = sp.panel === "new";
   const conceptoFilter = String(sp.concepto ?? "").trim();
   const buscar = String(sp.buscar ?? "").trim();
-  const listHref = buildFilterHref("/configuracion/conceptos", { concepto: conceptoFilter, buscar }, []);
+  const sortKey = (["concepto", "naturaleza", "en_listado", "valido_clubes", "valido_eventos", "valido_eedd_ctd_discapacidad"].includes(String(sp.sort)) ? sp.sort : "concepto") as ConceptosSortKey;
+  const sortDirection: SortDirection = sp.dir === "desc" ? "desc" : "asc";
+  const listParams = { concepto: conceptoFilter, buscar, sort: sortKey !== "concepto" ? sortKey : null, dir: sortDirection !== "asc" ? sortDirection : null };
+  const listHref = buildFilterHref("/configuracion/conceptos", listParams, []);
 
   const supabase = await createSupabaseServerClient();
   const user = await getCurrentUser();
@@ -108,8 +136,9 @@ export default async function ConceptosPage({
 
   let conceptosQuery = supabase
     .from("conceptos")
-    .select("id_concepto, concepto")
+    .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion")
     .eq("club_id", clubId)
+    .order(sortKey, { ascending: sortDirection === "asc", nullsFirst: false })
     .order("concepto", { ascending: true });
 
   if (conceptoFilter) {
@@ -127,7 +156,7 @@ export default async function ConceptosPage({
   if (editId && !editRow) {
     const { data: one } = await supabase
       .from("conceptos")
-      .select("id_concepto, concepto")
+      .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion")
       .eq("club_id", clubId)
       .eq("id_concepto", editId)
       .maybeSingle();
@@ -135,6 +164,27 @@ export default async function ConceptosPage({
   }
 
   const isDrawerOpen = canUserEdit && (isNewPanel || !!editRow);
+
+  function sortHref(nextSort: ConceptosSortKey) {
+    return buildFilterHref("/configuracion/conceptos", {
+      concepto: conceptoFilter,
+      buscar,
+      sort: nextSort === "concepto" ? null : nextSort,
+      dir: sortKey === nextSort && sortDirection === "asc" ? "desc" : "asc",
+    }, []);
+  }
+
+  function sortHeader(nextSort: ConceptosSortKey, label: string, textAlign: "left" | "center" = "left") {
+    const active = sortKey === nextSort;
+    return (
+      <th style={{ textAlign, borderBottom: "1px solid #ddd", padding: 8 }}>
+        <Link href={sortHref(nextSort)} className="table-sort-button" aria-label={`Ordenar por ${label}`}>
+          <span>{label}</span>
+          <span aria-hidden="true">{active ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}</span>
+        </Link>
+      </th>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 16 }}>
@@ -146,7 +196,7 @@ export default async function ConceptosPage({
         <div className="page-toolbar-actions">
           {canUserEdit ? (
             <Link
-              href="/configuracion/conceptos?panel=new#form"
+              href={buildFilterHref("/configuracion/conceptos", { ...listParams, panel: "new" }, []) + "#form"}
               className="icon-button tooltip-button"
               aria-label="Nuevo concepto"
             >
@@ -174,8 +224,10 @@ export default async function ConceptosPage({
 
       {/* Filtros */}
       <AutoSubmitFilters action="/configuracion/conceptos">
+        <input type="hidden" name="sort" value={sortKey !== "concepto" ? sortKey : ""} />
+        <input type="hidden" name="dir" value={sortDirection !== "asc" ? sortDirection : ""} />
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "12px 0 16px" }}>
-          <label className="filter-field" style={{ flex: "1 1 260px" }}><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" placeholder="Buscar en todos los campos" defaultValue={buscar} />{buscar ? <Link href={buildFilterHref("/configuracion/conceptos", { concepto: conceptoFilter }, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
+          <label className="filter-field" style={{ flex: "1 1 260px" }}><span>Búsqueda</span><div className="filter-control-row"><input type="search" name="buscar" placeholder="Buscar en todos los campos" defaultValue={buscar} />{buscar ? <Link href={buildFilterHref("/configuracion/conceptos", { ...listParams, concepto: conceptoFilter }, ["buscar"])} className="filter-reset-button" aria-label="Limpiar búsqueda">X</Link> : null}</div></label>
           <label className="filter-field" style={{ flex: "1 1 200px" }}>
             <span>Concepto</span>
             <div className="filter-control-row">
@@ -186,7 +238,7 @@ export default async function ConceptosPage({
                 defaultValue={conceptoFilter}
               />
               <Link
-                href={buildFilterHref("/configuracion/conceptos", { buscar }, ["concepto"])}
+                href={buildFilterHref("/configuracion/conceptos", { ...listParams, buscar }, ["concepto"])}
                 className="filter-reset-button"
                 aria-label="Limpiar concepto"
               >
@@ -240,6 +292,33 @@ export default async function ConceptosPage({
                     autoFocus
                   />
                 </label>
+                <label>
+                  Naturaleza
+                  <select name="naturaleza" defaultValue={editRow?.naturaleza ?? "gasto"}>
+                    <option value="gasto">Gasto</option>
+                    <option value="ingreso">Ingreso</option>
+                  </select>
+                </label>
+                <label>
+                  Código interno
+                  <input name="codigo_interno" defaultValue={editRow?.codigo_interno ?? ""} placeholder="Opcional" />
+                </label>
+                <label>
+                  Entidad de origen
+                  <select name="requisito_entidad_origen" defaultValue={editRow?.requisito_entidad_origen ?? "no"}>
+                    <option value="no">No requerida</option><option value="opcional">Opcional</option><option value="obligatoria">Obligatoria</option>
+                  </select>
+                </label>
+                <label>
+                  Descripción adicional
+                  <select name="requisito_descripcion" defaultValue={editRow?.requisito_descripcion ?? "opcional"}>
+                    <option value="no">No requerida</option><option value="opcional">Opcional</option><option value="obligatoria">Obligatoria</option>
+                  </select>
+                </label>
+                <label><input type="checkbox" name="en_listado" defaultChecked={editRow?.en_listado ?? false} /> En listado oficial</label>
+                <label><input type="checkbox" name="valido_clubes" defaultChecked={editRow?.valido_clubes ?? false} /> Admitido en Club</label>
+                <label><input type="checkbox" name="valido_eventos" defaultChecked={editRow?.valido_eventos ?? false} /> Admitido en Eventos</label>
+                <label><input type="checkbox" name="valido_eedd_ctd_discapacidad" defaultChecked={editRow?.valido_eedd_ctd_discapacidad ?? false} /> Admitido en EEDD / CTD / discapacidad</label>
               </form>
             )}
 
@@ -296,16 +375,11 @@ export default async function ConceptosPage({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>
-                Concepto
-              </th>
-              <th style={{ textAlign: "center", borderBottom: "1px solid #ddd", padding: 8 }}>
-                En listado
-              </th>
+              {sortHeader("concepto", "Concepto")}
+              {sortHeader("naturaleza", "Naturaleza")}
+              {sortHeader("en_listado", "En listado", "center")}
               {TIPOS_PROGRAMA.map((tipo) => (
-                <th key={tipo.value} style={{ textAlign: "center", borderBottom: "1px solid #ddd", padding: 8 }}>
-                  {tipo.label}
-                </th>
+                <Fragment key={tipo.value}>{sortHeader(tipo.value === "clubes" ? "valido_clubes" : tipo.value === "eventos" ? "valido_eventos" : "valido_eedd_ctd_discapacidad", tipo.label, "center")}</Fragment>
               ))}
               <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: 8 }}>
                 Acciones
@@ -321,12 +395,16 @@ export default async function ConceptosPage({
                   <span style={{ opacity: 0.55, fontSize: 12 }}>id: {row.id_concepto}</span>
                 </td>
 
+                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
+                  {row.naturaleza === "ingreso" ? "Ingreso" : "Gasto"}
+                </td>
+
                 <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "center", fontSize: 17 }}>
-                  {conceptoOficial(row.concepto) ? <span aria-label="Sí" title="Incluido en el listado">✓</span> : "-"}
+                  {row.en_listado ? <span aria-label="Sí" title="Incluido en el listado">✓</span> : "-"}
                 </td>
 
                 {TIPOS_PROGRAMA.map((tipo) => {
-                  const permitido = conceptoPermitido(tipo.value, row.concepto);
+                  const permitido = tipo.value === "clubes" ? row.valido_clubes : tipo.value === "eventos" ? row.valido_eventos : row.valido_eedd_ctd_discapacidad;
                   return (
                     <td key={tipo.value} style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "center", fontSize: 17 }}>
                       {permitido ? <span aria-label="Sí" title={`Admitido en ${tipo.label}`}>✓</span> : "-"}
@@ -338,7 +416,7 @@ export default async function ConceptosPage({
                   {canUserEdit ? (
                     <div className="row-actions">
                       <Link
-                        href={`/configuracion/conceptos?edit=${row.id_concepto}#form`}
+                        href={buildFilterHref("/configuracion/conceptos", { ...listParams, edit: row.id_concepto }, []) + "#form"}
                         className="app-action-link"
                         style={{ gap: 6 }}
                         aria-label="Editar concepto"
@@ -356,7 +434,7 @@ export default async function ConceptosPage({
 
             {rows.length === 0 && !error && (
               <tr>
-                <td colSpan={6} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={7} style={{ padding: 12, opacity: 0.8 }}>
                   No hay conceptos.
                 </td>
               </tr>
