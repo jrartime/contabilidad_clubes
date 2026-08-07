@@ -1,0 +1,1808 @@
+﻿{
+    "enums":  [
+
+              ],
+    "tables":  [
+                   {
+                       "table":  "bancos",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "categorias",
+                       "rls_forced":  false,
+                       "rls_enabled":  false
+                   },
+                   {
+                       "table":  "club_miembros",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "clubes",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "conceptos",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "contabilidad",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "entidades",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "programas",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "subvencion_programas",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   },
+                   {
+                       "table":  "subvenciones",
+                       "rls_forced":  false,
+                       "rls_enabled":  true
+                   }
+               ],
+    "columns":  [
+                    {
+                        "table":  "bancos",
+                        "column":  "id_banco",
+                        "default":  "nextval(\u0027bancos_id_banco_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "fecha_operativa",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "detalle",
+                        "default":  null,
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "debe",
+                        "default":  "0",
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "haber",
+                        "default":  "0",
+                        "ordinal":  6,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "saldo",
+                        "default":  null,
+                        "ordinal":  7,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "referencia",
+                        "default":  null,
+                        "ordinal":  8,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "categoria",
+                        "default":  null,
+                        "ordinal":  9,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "programa_id",
+                        "default":  null,
+                        "ordinal":  10,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  11,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "fecha_valor",
+                        "default":  null,
+                        "ordinal":  12,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "importe",
+                        "default":  null,
+                        "ordinal":  13,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "referencia_1",
+                        "default":  null,
+                        "ordinal":  14,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "referencia_2",
+                        "default":  null,
+                        "ordinal":  15,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "concepto_id",
+                        "default":  null,
+                        "ordinal":  16,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "concepto_txt",
+                        "default":  null,
+                        "ordinal":  17,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "programa_txt",
+                        "default":  null,
+                        "ordinal":  18,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "bancos",
+                        "column":  "orden",
+                        "default":  null,
+                        "ordinal":  19,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int4",
+                        "data_type":  "integer",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "categorias",
+                        "column":  "id_categoria",
+                        "default":  null,
+                        "ordinal":  1,
+                        "identity":  "YES",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "categorias",
+                        "column":  "categoria",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "categorias",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "club_miembros",
+                        "column":  "id_club_miembro",
+                        "default":  "nextval(\u0027club_miembros_id_club_miembro_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "club_miembros",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "club_miembros",
+                        "column":  "user_id",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "uuid",
+                        "data_type":  "uuid",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "club_miembros",
+                        "column":  "rol",
+                        "default":  "\u0027gestor\u0027::text",
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "id_club",
+                        "default":  "nextval(\u0027clubes_id_club_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "nombre",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "nif",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "direccion",
+                        "default":  null,
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "email",
+                        "default":  null,
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "telefono",
+                        "default":  null,
+                        "ordinal":  6,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "clubes",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  7,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "id_concepto",
+                        "default":  "nextval(\u0027conceptos_id_concepto_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "concepto",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "en_listado",
+                        "default":  "false",
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "bool",
+                        "data_type":  "boolean",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "valido_clubes",
+                        "default":  "false",
+                        "ordinal":  6,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "bool",
+                        "data_type":  "boolean",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "valido_eventos",
+                        "default":  "false",
+                        "ordinal":  7,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "bool",
+                        "data_type":  "boolean",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "valido_eedd_ctd_discapacidad",
+                        "default":  "false",
+                        "ordinal":  8,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "bool",
+                        "data_type":  "boolean",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "naturaleza",
+                        "default":  "\u0027gasto\u0027::text",
+                        "ordinal":  9,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "codigo_interno",
+                        "default":  null,
+                        "ordinal":  10,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "requisito_entidad_origen",
+                        "default":  "\u0027no\u0027::text",
+                        "ordinal":  11,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "requisito_descripcion",
+                        "default":  "\u0027opcional\u0027::text",
+                        "ordinal":  12,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "conceptos",
+                        "column":  "subvencionabilidad",
+                        "default":  "\u0027subvencionable\u0027::text",
+                        "ordinal":  13,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "id_contabilidad",
+                        "default":  "nextval(\u0027contabilidad_id_contabilidad_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "tipo_id",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "tipo_documento",
+                        "default":  null,
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "personal",
+                        "default":  null,
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "bruto",
+                        "default":  null,
+                        "ordinal":  6,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "bruto_imputado",
+                        "default":  null,
+                        "ordinal":  7,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "coste_empresarial",
+                        "default":  null,
+                        "ordinal":  8,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "ss",
+                        "default":  null,
+                        "ordinal":  9,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "ss_imputado",
+                        "default":  null,
+                        "ordinal":  10,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "proveedor_id",
+                        "default":  null,
+                        "ordinal":  11,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "numero_factura",
+                        "default":  null,
+                        "ordinal":  12,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "fecha",
+                        "default":  null,
+                        "ordinal":  13,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "fecha_pago",
+                        "default":  null,
+                        "ordinal":  14,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "importe_total",
+                        "default":  "0",
+                        "ordinal":  15,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "importe_imputado",
+                        "default":  "0",
+                        "ordinal":  16,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "concepto_id",
+                        "default":  null,
+                        "ordinal":  17,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "detalle",
+                        "default":  null,
+                        "ordinal":  18,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "entidad_id",
+                        "default":  null,
+                        "ordinal":  19,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "programa_id",
+                        "default":  null,
+                        "ordinal":  20,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "categoria",
+                        "default":  null,
+                        "ordinal":  21,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  22,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "categoria_id",
+                        "default":  null,
+                        "ordinal":  23,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "personal_id",
+                        "default":  null,
+                        "ordinal":  24,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "contabilidad",
+                        "column":  "observaciones",
+                        "default":  null,
+                        "ordinal":  25,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "entidades",
+                        "column":  "id_entidad",
+                        "default":  "nextval(\u0027entidades_id_entidad_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "entidades",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "entidades",
+                        "column":  "entidad",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "entidades",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "id_programa",
+                        "default":  "nextval(\u0027programas_id_programa_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "programa",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "subvencion",
+                        "default":  null,
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "fecha_limite",
+                        "default":  null,
+                        "ordinal":  6,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "anio",
+                        "default":  null,
+                        "ordinal":  7,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "int4",
+                        "data_type":  "integer",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "activo",
+                        "default":  "true",
+                        "ordinal":  8,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "bool",
+                        "data_type":  "boolean",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "programas",
+                        "column":  "tipo_programa",
+                        "default":  "\u0027clubes\u0027::text",
+                        "ordinal":  9,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvencion_programas",
+                        "column":  "id_subvencion_programa",
+                        "default":  "nextval(\u0027subvencion_programas_id_subvencion_programa_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvencion_programas",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvencion_programas",
+                        "column":  "subvencion_id",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvencion_programas",
+                        "column":  "programa_id",
+                        "default":  null,
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvencion_programas",
+                        "column":  "presupuesto_previsto",
+                        "default":  "0",
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "id_subvencion",
+                        "default":  "nextval(\u0027subvenciones_id_subvencion_seq\u0027::regclass)",
+                        "ordinal":  1,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "club_id",
+                        "default":  null,
+                        "ordinal":  2,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int8",
+                        "data_type":  "bigint",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "nombre",
+                        "default":  null,
+                        "ordinal":  3,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "administracion",
+                        "default":  null,
+                        "ordinal":  4,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "convocatoria",
+                        "default":  null,
+                        "ordinal":  5,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "anio",
+                        "default":  null,
+                        "ordinal":  6,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "int4",
+                        "data_type":  "integer",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "ref_expediente",
+                        "default":  null,
+                        "ordinal":  7,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "importe_solicitado",
+                        "default":  "0",
+                        "ordinal":  8,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "importe_concedido",
+                        "default":  "0",
+                        "ordinal":  9,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "numeric",
+                        "data_type":  "numeric",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "fecha_inicio_gasto",
+                        "default":  null,
+                        "ordinal":  10,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "fecha_fin_gasto",
+                        "default":  null,
+                        "ordinal":  11,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "fecha_limite_justificacion",
+                        "default":  null,
+                        "ordinal":  12,
+                        "identity":  "NO",
+                        "nullable":  "YES",
+                        "udt_name":  "date",
+                        "data_type":  "date",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "estado",
+                        "default":  "\u0027borrador\u0027::text",
+                        "ordinal":  13,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "text",
+                        "data_type":  "text",
+                        "generated":  "NEVER"
+                    },
+                    {
+                        "table":  "subvenciones",
+                        "column":  "created_at",
+                        "default":  "now()",
+                        "ordinal":  14,
+                        "identity":  "NO",
+                        "nullable":  "NO",
+                        "udt_name":  "timestamptz",
+                        "data_type":  "timestamp with time zone",
+                        "generated":  "NEVER"
+                    }
+                ],
+    "indexes":  [
+                    {
+                        "name":  "bancos_pkey",
+                        "table":  "bancos",
+                        "definition":  "CREATE UNIQUE INDEX bancos_pkey ON public.bancos USING btree (id_banco)"
+                    },
+                    {
+                        "name":  "idx_bancos_club",
+                        "table":  "bancos",
+                        "definition":  "CREATE INDEX idx_bancos_club ON public.bancos USING btree (club_id)"
+                    },
+                    {
+                        "name":  "idx_bancos_fecha",
+                        "table":  "bancos",
+                        "definition":  "CREATE INDEX idx_bancos_fecha ON public.bancos USING btree (fecha_operativa)"
+                    },
+                    {
+                        "name":  "idx_bancos_ref",
+                        "table":  "bancos",
+                        "definition":  "CREATE INDEX idx_bancos_ref ON public.bancos USING btree (referencia)"
+                    },
+                    {
+                        "name":  "categorias_pkey",
+                        "table":  "categorias",
+                        "definition":  "CREATE UNIQUE INDEX categorias_pkey ON public.categorias USING btree (id_categoria)"
+                    },
+                    {
+                        "name":  "club_miembros_club_id_user_id_key",
+                        "table":  "club_miembros",
+                        "definition":  "CREATE UNIQUE INDEX club_miembros_club_id_user_id_key ON public.club_miembros USING btree (club_id, user_id)"
+                    },
+                    {
+                        "name":  "club_miembros_pkey",
+                        "table":  "club_miembros",
+                        "definition":  "CREATE UNIQUE INDEX club_miembros_pkey ON public.club_miembros USING btree (id_club_miembro)"
+                    },
+                    {
+                        "name":  "club_miembros_unique",
+                        "table":  "club_miembros",
+                        "definition":  "CREATE UNIQUE INDEX club_miembros_unique ON public.club_miembros USING btree (club_id, user_id)"
+                    },
+                    {
+                        "name":  "clubes_pkey",
+                        "table":  "clubes",
+                        "definition":  "CREATE UNIQUE INDEX clubes_pkey ON public.clubes USING btree (id_club)"
+                    },
+                    {
+                        "name":  "conceptos_club_codigo_interno_unique",
+                        "table":  "conceptos",
+                        "definition":  "CREATE UNIQUE INDEX conceptos_club_codigo_interno_unique ON public.conceptos USING btree (club_id, codigo_interno) WHERE (codigo_interno IS NOT NULL)"
+                    },
+                    {
+                        "name":  "conceptos_club_id_concepto_key",
+                        "table":  "conceptos",
+                        "definition":  "CREATE UNIQUE INDEX conceptos_club_id_concepto_key ON public.conceptos USING btree (club_id, concepto)"
+                    },
+                    {
+                        "name":  "conceptos_pkey",
+                        "table":  "conceptos",
+                        "definition":  "CREATE UNIQUE INDEX conceptos_pkey ON public.conceptos USING btree (id_concepto)"
+                    },
+                    {
+                        "name":  "contabilidad_club_id_fecha_idx",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE INDEX contabilidad_club_id_fecha_idx ON public.contabilidad USING btree (club_id, fecha DESC)"
+                    },
+                    {
+                        "name":  "contabilidad_club_id_proveedor_idx",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE INDEX contabilidad_club_id_proveedor_idx ON public.contabilidad USING btree (club_id, proveedor_id)"
+                    },
+                    {
+                        "name":  "contabilidad_pkey",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE UNIQUE INDEX contabilidad_pkey ON public.contabilidad USING btree (id_contabilidad)"
+                    },
+                    {
+                        "name":  "idx_contabilidad_club",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE INDEX idx_contabilidad_club ON public.contabilidad USING btree (club_id)"
+                    },
+                    {
+                        "name":  "idx_contabilidad_factura",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE INDEX idx_contabilidad_factura ON public.contabilidad USING btree (numero_factura)"
+                    },
+                    {
+                        "name":  "idx_contabilidad_fecha",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE INDEX idx_contabilidad_fecha ON public.contabilidad USING btree (fecha)"
+                    },
+                    {
+                        "name":  "idx_contabilidad_proveedor",
+                        "table":  "contabilidad",
+                        "definition":  "CREATE INDEX idx_contabilidad_proveedor ON public.contabilidad USING btree (proveedor_id)"
+                    },
+                    {
+                        "name":  "entidades_club_id_entidad_key",
+                        "table":  "entidades",
+                        "definition":  "CREATE UNIQUE INDEX entidades_club_id_entidad_key ON public.entidades USING btree (club_id, entidad)"
+                    },
+                    {
+                        "name":  "entidades_pkey",
+                        "table":  "entidades",
+                        "definition":  "CREATE UNIQUE INDEX entidades_pkey ON public.entidades USING btree (id_entidad)"
+                    },
+                    {
+                        "name":  "idx_programas_club_activo",
+                        "table":  "programas",
+                        "definition":  "CREATE INDEX idx_programas_club_activo ON public.programas USING btree (club_id, activo)"
+                    },
+                    {
+                        "name":  "programas_club_id_programa_key",
+                        "table":  "programas",
+                        "definition":  "CREATE UNIQUE INDEX programas_club_id_programa_key ON public.programas USING btree (club_id, programa)"
+                    },
+                    {
+                        "name":  "programas_pkey",
+                        "table":  "programas",
+                        "definition":  "CREATE UNIQUE INDEX programas_pkey ON public.programas USING btree (id_programa)"
+                    },
+                    {
+                        "name":  "idx_subvprog_club",
+                        "table":  "subvencion_programas",
+                        "definition":  "CREATE INDEX idx_subvprog_club ON public.subvencion_programas USING btree (club_id)"
+                    },
+                    {
+                        "name":  "subvencion_programas_pkey",
+                        "table":  "subvencion_programas",
+                        "definition":  "CREATE UNIQUE INDEX subvencion_programas_pkey ON public.subvencion_programas USING btree (id_subvencion_programa)"
+                    },
+                    {
+                        "name":  "subvencion_programas_subvencion_id_programa_id_key",
+                        "table":  "subvencion_programas",
+                        "definition":  "CREATE UNIQUE INDEX subvencion_programas_subvencion_id_programa_id_key ON public.subvencion_programas USING btree (subvencion_id, programa_id)"
+                    },
+                    {
+                        "name":  "idx_subvenciones_anio",
+                        "table":  "subvenciones",
+                        "definition":  "CREATE INDEX idx_subvenciones_anio ON public.subvenciones USING btree (anio)"
+                    },
+                    {
+                        "name":  "idx_subvenciones_club",
+                        "table":  "subvenciones",
+                        "definition":  "CREATE INDEX idx_subvenciones_club ON public.subvenciones USING btree (club_id)"
+                    },
+                    {
+                        "name":  "subvenciones_pkey",
+                        "table":  "subvenciones",
+                        "definition":  "CREATE UNIQUE INDEX subvenciones_pkey ON public.subvenciones USING btree (id_subvencion)"
+                    }
+                ],
+    "policies":  [
+                     {
+                         "name":  "bancos_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "bancos",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     },
+                     {
+                         "name":  "club_miembros_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "club_miembros",
+                         "using":  "is_admin()",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "is_admin()"
+                     },
+                     {
+                         "name":  "club_miembros_select_propios",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "club_miembros",
+                         "using":  "(user_id = auth.uid())",
+                         "command":  "SELECT",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  null
+                     },
+                     {
+                         "name":  "clubes_delete",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "clubes",
+                         "using":  "is_admin()",
+                         "command":  "DELETE",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  null
+                     },
+                     {
+                         "name":  "clubes_insert",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "clubes",
+                         "using":  null,
+                         "command":  "INSERT",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "is_admin()"
+                     },
+                     {
+                         "name":  "clubes_select_miembro",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "clubes",
+                         "using":  "(EXISTS ( SELECT 1\n   FROM club_miembros cm\n  WHERE ((cm.club_id = clubes.id_club) AND (cm.user_id = auth.uid()))))",
+                         "command":  "SELECT",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  null
+                     },
+                     {
+                         "name":  "clubes_update_miembro_admin",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "clubes",
+                         "using":  "(EXISTS ( SELECT 1\n   FROM club_miembros cm\n  WHERE ((cm.club_id = clubes.id_club) AND (cm.user_id = auth.uid()) AND (cm.rol = ANY (ARRAY[\u0027owner\u0027::text, \u0027admin\u0027::text])))))",
+                         "command":  "UPDATE",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "(EXISTS ( SELECT 1\n   FROM club_miembros cm\n  WHERE ((cm.club_id = clubes.id_club) AND (cm.user_id = auth.uid()) AND (cm.rol = ANY (ARRAY[\u0027owner\u0027::text, \u0027admin\u0027::text])))))"
+                     },
+                     {
+                         "name":  "clubes_write",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "clubes",
+                         "using":  "is_admin()",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "is_admin()"
+                     },
+                     {
+                         "name":  "conceptos_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "conceptos",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     },
+                     {
+                         "name":  "contabilidad_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "contabilidad",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     },
+                     {
+                         "name":  "entidades_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "entidades",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     },
+                     {
+                         "name":  "programas_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "programas",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     },
+                     {
+                         "name":  "subvencion_programas_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "subvencion_programas",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     },
+                     {
+                         "name":  "subvenciones_all",
+                         "roles":  [
+                                       "authenticated"
+                                   ],
+                         "table":  "subvenciones",
+                         "using":  "can_access_club(club_id)",
+                         "command":  "ALL",
+                         "permissive":  "PERMISSIVE",
+                         "with_check":  "can_access_club(club_id)"
+                     }
+                 ],
+    "triggers":  [
+
+                 ],
+    "captured_at":  "2026-08-07T10:39:51.089503+00:00",
+    "constraints":  [
+                        {
+                            "name":  "bancos_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "bancos",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "bancos_concepto_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "bancos",
+                            "definition":  "FOREIGN KEY (concepto_id) REFERENCES conceptos(id_concepto) ON UPDATE CASCADE",
+                            "referenced_table":  "conceptos"
+                        },
+                        {
+                            "name":  "bancos_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "bancos",
+                            "definition":  "PRIMARY KEY (id_banco)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "bancos_programa_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "bancos",
+                            "definition":  "FOREIGN KEY (programa_id) REFERENCES programas(id_programa) ON UPDATE CASCADE",
+                            "referenced_table":  "programas"
+                        },
+                        {
+                            "name":  "categorias_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "categorias",
+                            "definition":  "PRIMARY KEY (id_categoria)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "club_miembros_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "club_miembros",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "club_miembros_club_id_user_id_key",
+                            "type":  "UNIQUE",
+                            "table":  "club_miembros",
+                            "definition":  "UNIQUE (club_id, user_id)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "club_miembros_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "club_miembros",
+                            "definition":  "PRIMARY KEY (id_club_miembro)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "club_miembros_unique",
+                            "type":  "UNIQUE",
+                            "table":  "club_miembros",
+                            "definition":  "UNIQUE (club_id, user_id)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "club_miembros_user_fk",
+                            "type":  "FOREIGN KEY",
+                            "table":  "club_miembros",
+                            "definition":  "FOREIGN KEY (user_id) REFERENCES perfiles(user_id) ON DELETE CASCADE",
+                            "referenced_table":  "perfiles"
+                        },
+                        {
+                            "name":  "club_miembros_user_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "club_miembros",
+                            "definition":  "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+                            "referenced_table":  "users"
+                        },
+                        {
+                            "name":  "clubes_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "clubes",
+                            "definition":  "PRIMARY KEY (id_club)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "conceptos_club_id_concepto_key",
+                            "type":  "UNIQUE",
+                            "table":  "conceptos",
+                            "definition":  "UNIQUE (club_id, concepto)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "conceptos_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "conceptos",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "conceptos_naturaleza_check",
+                            "type":  "CHECK",
+                            "table":  "conceptos",
+                            "definition":  "CHECK (naturaleza = ANY (ARRAY[\u0027gasto\u0027::text, \u0027ingreso\u0027::text]))",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "conceptos_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "conceptos",
+                            "definition":  "PRIMARY KEY (id_concepto)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "conceptos_requisito_descripcion_check",
+                            "type":  "CHECK",
+                            "table":  "conceptos",
+                            "definition":  "CHECK (requisito_descripcion = ANY (ARRAY[\u0027no\u0027::text, \u0027opcional\u0027::text, \u0027obligatoria\u0027::text]))",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "conceptos_requisito_entidad_check",
+                            "type":  "CHECK",
+                            "table":  "conceptos",
+                            "definition":  "CHECK (requisito_entidad_origen = ANY (ARRAY[\u0027no\u0027::text, \u0027opcional\u0027::text, \u0027obligatoria\u0027::text]))",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "conceptos_subvencionabilidad_check",
+                            "type":  "CHECK",
+                            "table":  "conceptos",
+                            "definition":  "CHECK (subvencionabilidad = ANY (ARRAY[\u0027subvencionable\u0027::text, \u0027no_subvencionable\u0027::text, \u0027condicionada\u0027::text]))",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "contabilidad_categoria_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (categoria_id) REFERENCES categorias(id_categoria) ON DELETE SET NULL",
+                            "referenced_table":  "categorias"
+                        },
+                        {
+                            "name":  "contabilidad_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "contabilidad_concepto_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (concepto_id) REFERENCES conceptos(id_concepto) ON UPDATE CASCADE",
+                            "referenced_table":  "conceptos"
+                        },
+                        {
+                            "name":  "contabilidad_entidad_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (entidad_id) REFERENCES entidades(id_entidad) ON UPDATE CASCADE",
+                            "referenced_table":  "entidades"
+                        },
+                        {
+                            "name":  "contabilidad_personal_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (personal_id) REFERENCES personal(id_personal)",
+                            "referenced_table":  "personal"
+                        },
+                        {
+                            "name":  "contabilidad_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "contabilidad",
+                            "definition":  "PRIMARY KEY (id_contabilidad)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "contabilidad_programa_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (programa_id) REFERENCES programas(id_programa) ON UPDATE CASCADE",
+                            "referenced_table":  "programas"
+                        },
+                        {
+                            "name":  "contabilidad_proveedor_fk",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (proveedor_id) REFERENCES proveedores(id_proveedor) ON DELETE SET NULL",
+                            "referenced_table":  "proveedores"
+                        },
+                        {
+                            "name":  "contabilidad_proveedor_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (proveedor_id) REFERENCES proveedores(id_proveedor) ON UPDATE CASCADE",
+                            "referenced_table":  "proveedores"
+                        },
+                        {
+                            "name":  "contabilidad_tipo_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "contabilidad",
+                            "definition":  "FOREIGN KEY (tipo_id) REFERENCES tipos(id_tipo) ON UPDATE CASCADE",
+                            "referenced_table":  "tipos"
+                        },
+                        {
+                            "name":  "entidades_club_id_entidad_key",
+                            "type":  "UNIQUE",
+                            "table":  "entidades",
+                            "definition":  "UNIQUE (club_id, entidad)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "entidades_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "entidades",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "entidades_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "entidades",
+                            "definition":  "PRIMARY KEY (id_entidad)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "programas_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "programas",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "programas_club_id_programa_key",
+                            "type":  "UNIQUE",
+                            "table":  "programas",
+                            "definition":  "UNIQUE (club_id, programa)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "programas_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "programas",
+                            "definition":  "PRIMARY KEY (id_programa)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "programas_tipo_programa_check",
+                            "type":  "CHECK",
+                            "table":  "programas",
+                            "definition":  "CHECK (tipo_programa = ANY (ARRAY[\u0027clubes\u0027::text, \u0027eventos\u0027::text, \u0027eedd_ctd_discapacidad\u0027::text]))",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "subvencion_programas_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "subvencion_programas",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "subvencion_programas_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "subvencion_programas",
+                            "definition":  "PRIMARY KEY (id_subvencion_programa)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "subvencion_programas_programa_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "subvencion_programas",
+                            "definition":  "FOREIGN KEY (programa_id) REFERENCES programas(id_programa) ON DELETE RESTRICT",
+                            "referenced_table":  "programas"
+                        },
+                        {
+                            "name":  "subvencion_programas_subvencion_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "subvencion_programas",
+                            "definition":  "FOREIGN KEY (subvencion_id) REFERENCES subvenciones(id_subvencion) ON DELETE CASCADE",
+                            "referenced_table":  "subvenciones"
+                        },
+                        {
+                            "name":  "subvencion_programas_subvencion_id_programa_id_key",
+                            "type":  "UNIQUE",
+                            "table":  "subvencion_programas",
+                            "definition":  "UNIQUE (subvencion_id, programa_id)",
+                            "referenced_table":  null
+                        },
+                        {
+                            "name":  "subvenciones_club_id_fkey",
+                            "type":  "FOREIGN KEY",
+                            "table":  "subvenciones",
+                            "definition":  "FOREIGN KEY (club_id) REFERENCES clubes(id_club) ON DELETE CASCADE",
+                            "referenced_table":  "clubes"
+                        },
+                        {
+                            "name":  "subvenciones_pkey",
+                            "type":  "PRIMARY KEY",
+                            "table":  "subvenciones",
+                            "definition":  "PRIMARY KEY (id_subvencion)",
+                            "referenced_table":  null
+                        }
+                    ],
+    "database_version":  "17.6"
+}

@@ -97,7 +97,7 @@ async function upsertAsiento(formData: FormData) {
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
   if (concepto_id) {
-    const { data: concepto } = await supabase.from("conceptos").select("concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, requisito_entidad_origen, requisito_descripcion").eq("club_id", clubId).eq("id_concepto", concepto_id).maybeSingle();
+    const { data: concepto } = await supabase.from("conceptos").select("concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, requisito_entidad_origen, requisito_descripcion, subvencionabilidad").eq("club_id", clubId).eq("id_concepto", concepto_id).maybeSingle();
     if (!concepto) redirect("/contabilidad?error=" + encodeURIComponent("Concepto no válido."));
     if (programa_id) {
       const { data: programa } = await supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programa_id).maybeSingle();
@@ -110,6 +110,9 @@ async function upsertAsiento(formData: FormData) {
     }
     if (concepto.requisito_descripcion === "obligatoria" && !observaciones) {
       redirect("/contabilidad?error=" + encodeURIComponent("Este concepto requiere una descripción adicional en observaciones."));
+    }
+    if (concepto.subvencionabilidad === "no_subvencionable" && importe_imputado !== 0) {
+      redirect("/contabilidad?error=" + encodeURIComponent("Los gastos no subvencionables deben tener un importe imputado de 0,00 €."));
     }
   }
 
@@ -391,7 +394,7 @@ export default async function ContabilidadPage({
 
   const conceptosPromise = supabase
     .from("conceptos")
-    .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion")
+    .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion, subvencionabilidad")
     .eq("club_id", clubId)
     .order("concepto", { ascending: true });
 

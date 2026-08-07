@@ -26,9 +26,10 @@ type ConceptoRow = {
   codigo_interno: string | null;
   requisito_entidad_origen: "no" | "opcional" | "obligatoria";
   requisito_descripcion: "no" | "opcional" | "obligatoria";
+  subvencionabilidad: "subvencionable" | "no_subvencionable" | "condicionada";
 };
 
-type ConceptosSortKey = "concepto" | "naturaleza" | "en_listado" | "valido_clubes" | "valido_eventos" | "valido_eedd_ctd_discapacidad";
+type ConceptosSortKey = "concepto" | "naturaleza" | "subvencionabilidad" | "en_listado" | "valido_clubes" | "valido_eventos" | "valido_eedd_ctd_discapacidad";
 type SortDirection = "asc" | "desc";
 
 async function upsertConcepto(formData: FormData) {
@@ -46,7 +47,8 @@ async function upsertConcepto(formData: FormData) {
   const codigo_interno = String(formData.get("codigo_interno") ?? "").trim() || null;
   const requisito_entidad_origen = String(formData.get("requisito_entidad_origen") ?? "no");
   const requisito_descripcion = String(formData.get("requisito_descripcion") ?? "opcional");
-  const metadata = { naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion };
+  const subvencionabilidad = String(formData.get("subvencionabilidad") ?? "subvencionable");
+  const metadata = { naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion, subvencionabilidad };
   if (!concepto) redirect("/configuracion/conceptos?error=Concepto%20obligatorio");
 
   const supabase = await createSupabaseServerClient();
@@ -119,7 +121,7 @@ export default async function ConceptosPage({
   const isNewPanel = sp.panel === "new";
   const conceptoFilter = String(sp.concepto ?? "").trim();
   const buscar = String(sp.buscar ?? "").trim();
-  const sortKey = (["concepto", "naturaleza", "en_listado", "valido_clubes", "valido_eventos", "valido_eedd_ctd_discapacidad"].includes(String(sp.sort)) ? sp.sort : "concepto") as ConceptosSortKey;
+  const sortKey = (["concepto", "naturaleza", "subvencionabilidad", "en_listado", "valido_clubes", "valido_eventos", "valido_eedd_ctd_discapacidad"].includes(String(sp.sort)) ? sp.sort : "concepto") as ConceptosSortKey;
   const sortDirection: SortDirection = sp.dir === "desc" ? "desc" : "asc";
   const listParams = { concepto: conceptoFilter, buscar, sort: sortKey !== "concepto" ? sortKey : null, dir: sortDirection !== "asc" ? sortDirection : null };
   const listHref = buildFilterHref("/configuracion/conceptos", listParams, []);
@@ -136,7 +138,7 @@ export default async function ConceptosPage({
 
   let conceptosQuery = supabase
     .from("conceptos")
-    .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion")
+    .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion, subvencionabilidad")
     .eq("club_id", clubId)
     .order(sortKey, { ascending: sortDirection === "asc", nullsFirst: false })
     .order("concepto", { ascending: true });
@@ -156,7 +158,7 @@ export default async function ConceptosPage({
   if (editId && !editRow) {
     const { data: one } = await supabase
       .from("conceptos")
-      .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion")
+      .select("id_concepto, concepto, en_listado, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, naturaleza, codigo_interno, requisito_entidad_origen, requisito_descripcion, subvencionabilidad")
       .eq("club_id", clubId)
       .eq("id_concepto", editId)
       .maybeSingle();
@@ -304,6 +306,14 @@ export default async function ConceptosPage({
                   <input name="codigo_interno" defaultValue={editRow?.codigo_interno ?? ""} placeholder="Opcional" />
                 </label>
                 <label>
+                  Clasificación
+                  <select name="subvencionabilidad" defaultValue={editRow?.subvencionabilidad ?? "subvencionable"}>
+                    <option value="subvencionable">Subvencionable</option>
+                    <option value="no_subvencionable">No subvencionable</option>
+                    <option value="condicionada">Condicionada</option>
+                  </select>
+                </label>
+                <label>
                   Entidad de origen
                   <select name="requisito_entidad_origen" defaultValue={editRow?.requisito_entidad_origen ?? "no"}>
                     <option value="no">No requerida</option><option value="opcional">Opcional</option><option value="obligatoria">Obligatoria</option>
@@ -377,6 +387,7 @@ export default async function ConceptosPage({
             <tr>
               {sortHeader("concepto", "Concepto")}
               {sortHeader("naturaleza", "Naturaleza")}
+              {sortHeader("subvencionabilidad", "Clasificación")}
               {sortHeader("en_listado", "En listado", "center")}
               {TIPOS_PROGRAMA.map((tipo) => (
                 <Fragment key={tipo.value}>{sortHeader(tipo.value === "clubes" ? "valido_clubes" : tipo.value === "eventos" ? "valido_eventos" : "valido_eedd_ctd_discapacidad", tipo.label, "center")}</Fragment>
@@ -397,6 +408,10 @@ export default async function ConceptosPage({
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
                   {row.naturaleza === "ingreso" ? "Ingreso" : "Gasto"}
+                </td>
+
+                <td style={{ padding: 8, borderBottom: "1px solid #eee" }}>
+                  {row.subvencionabilidad === "no_subvencionable" ? "No subvencionable" : row.subvencionabilidad === "condicionada" ? "Condicionada" : "Subvencionable"}
                 </td>
 
                 <td style={{ padding: 8, borderBottom: "1px solid #eee", textAlign: "center", fontSize: 17 }}>
@@ -434,7 +449,7 @@ export default async function ConceptosPage({
 
             {rows.length === 0 && !error && (
               <tr>
-                <td colSpan={7} style={{ padding: 12, opacity: 0.8 }}>
+                <td colSpan={8} style={{ padding: 12, opacity: 0.8 }}>
                   No hay conceptos.
                 </td>
               </tr>

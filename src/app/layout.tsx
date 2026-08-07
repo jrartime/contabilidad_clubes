@@ -28,6 +28,8 @@ export default async function RootLayout({
 
   const showConciliacion = !!activeClubId && canAccessConciliation(myRole);
   const showEditModules = !!activeClubId && canEditClubData(myRole);
+  // Presupuestos aplica RLS de lectura a todos los miembros, incluido viewer.
+  const showPresupuestos = !!activeClubId;
   const showMembers = !!activeClubId && canManageMembers(myRole);
   const showNominas = !!activeClubId && canEditClubData(myRole);
   const showPersonal = !!activeClubId;
@@ -38,11 +40,12 @@ export default async function RootLayout({
       ? [{ href: "/conciliacion/1a1", label: "Conciliacion" }]
       : []),
     ...(showEditModules
-      ? [
-          { href: "/contabilidad", label: "Contabilidad" },
-          { href: "/bancos", label: "Banco" },
-        ]
+      ? [{ href: "/contabilidad", label: "Contabilidad" }]
       : []),
+    ...(showPresupuestos
+      ? [{ href: "/presupuestos", label: "Presupuestos" }]
+      : []),
+    ...(showEditModules ? [{ href: "/bancos", label: "Banco" }] : []),
     ...(showNominas ? [{ href: "/nominas", label: "Nominas" }] : []),
     ...((showEditModules || showPersonal || showMembers) ? [{ href: "/configuracion", label: "Configuración" }] : []),
   ];

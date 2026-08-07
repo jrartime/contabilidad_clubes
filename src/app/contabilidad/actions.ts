@@ -61,25 +61,30 @@ export async function updateContabilidadAction(payload: {
   const myRole = await getMyClubRole(clubId);
   if (!canEditClubData(myRole)) redirect("/no-autorizado");
 
-  if ("programa_id" in payload || "concepto_id" in payload) {
+  if ("programa_id" in payload || "concepto_id" in payload || "importe_imputado" in payload) {
     const { data: actual } = await supabase
       .from("contabilidad")
-      .select("programa_id, concepto_id, entidad_id, observaciones")
+      .select("programa_id, concepto_id, entidad_id, observaciones, importe_imputado")
       .eq("club_id", clubId)
       .eq("id_contabilidad", payload.id_contabilidad)
       .maybeSingle();
     const programaId = "programa_id" in payload ? payload.programa_id : actual?.programa_id;
     const conceptoId = "concepto_id" in payload ? payload.concepto_id : actual?.concepto_id;
-    if (programaId && conceptoId) {
-      const [{ data: programa }, { data: concepto }] = await Promise.all([
-        supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programaId).maybeSingle(),
-        supabase.from("conceptos").select("concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, requisito_entidad_origen, requisito_descripcion").eq("club_id", clubId).eq("id_concepto", conceptoId).maybeSingle(),
-      ]);
-      if (!programa || !concepto || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto)) {
+    if (conceptoId) {
+      const { data: concepto } = await supabase.from("conceptos").select("concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, requisito_entidad_origen, requisito_descripcion, subvencionabilidad").eq("club_id", clubId).eq("id_concepto", conceptoId).maybeSingle();
+      if (!concepto) throw new Error("Concepto no válido.");
+      if (programaId) {
+        const { data: programa } = await supabase.from("programas").select("tipo_programa").eq("club_id", clubId).eq("id_programa", programaId).maybeSingle();
+        if (!programa || !isTipoPrograma(programa.tipo_programa) || !conceptoPermitido(programa.tipo_programa, concepto)) {
         throw new Error("El concepto seleccionado no es válido para el tipo de programa.");
+        }
       }
       if (concepto.requisito_entidad_origen === "obligatoria" && !actual?.entidad_id) throw new Error("Este concepto requiere indicar la entidad de origen.");
       if (concepto.requisito_descripcion === "obligatoria" && !actual?.observaciones) throw new Error("Este concepto requiere una descripción en observaciones.");
+      const importeImputado = "importe_imputado" in payload
+        ? (typeof payload.importe_imputado === "number" ? payload.importe_imputado : parseDecimalToNumber(payload.importe_imputado))
+        : Number(actual?.importe_imputado ?? 0);
+      if (concepto.subvencionabilidad === "no_subvencionable" && importeImputado !== 0) throw new Error("Los gastos no subvencionables deben tener un importe imputado de 0,00 €.");
     }
   }
 
@@ -144,16 +149,24 @@ export async function asignarContabilidadMasivoAction(ids: number[], field: Cont
   if (value !== null && (type === "text" || type === "date")) value = String(value).trim();
 
   if (field === "programa_id" || field === "concepto_id") {
-    const { data: selected } = await supabase.from("contabilidad").select("id_contabilidad, programa_id, concepto_id").eq("club_id", clubId).in("id_contabilidad", ids);
+    const { data: selected } = await supabase.from("contabilidad").select("id_contabilidad, programa_id, concepto_id, importe_imputado").eq("club_id", clubId).in("id_contabilidad", ids);
     const programIds = new Set<number>(); const conceptIds = new Set<number>();
     for (const row of selected ?? []) { const p = field === "programa_id" ? value : row.programa_id; const c = field === "concepto_id" ? value : row.concepto_id; if (p && c) { programIds.add(Number(p)); conceptIds.add(Number(c)); } }
     if (programIds.size && conceptIds.size) {
       const [{ data: ps }, { data: cs }] = await Promise.all([
         supabase.from("programas").select("id_programa, tipo_programa").eq("club_id", clubId).in("id_programa", [...programIds]),
-        supabase.from("conceptos").select("id_concepto, concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad").eq("club_id", clubId).in("id_concepto", [...conceptIds]),
+        supabase.from("conceptos").select("id_concepto, concepto, valido_clubes, valido_eventos, valido_eedd_ctd_discapacidad, subvencionabilidad").eq("club_id", clubId).in("id_concepto", [...conceptIds]),
       ]);
       const pm = new Map((ps ?? []).map((x: any) => [Number(x.id_programa), x.tipo_programa])); const cm = new Map((cs ?? []).map((x: any) => [Number(x.id_concepto), x]));
-      for (const row of selected ?? []) { const p = Number(field === "programa_id" ? value : row.programa_id); const c = Number(field === "concepto_id" ? value : row.concepto_id); const tipo = pm.get(p); const concepto = cm.get(c); if (p && c && (!isTipoPrograma(tipo) || !concepto || !conceptoPermitido(tipo, concepto))) return { updated: 0, error: "La asignación produciría una combinación programa–concepto no válida" }; }
+      for (const row of selected ?? []) { const p = Number(field === "programa_id" ? value : row.programa_id); const c = Number(field === "concepto_id" ? value : row.concepto_id); const tipo = pm.get(p); const concepto = cm.get(c); if (p && c && (!isTipoPrograma(tipo) || !concepto || !conceptoPermitido(tipo, concepto))) return { updated: 0, error: "La asignación produciría una combinación programa–concepto no válida" }; if (concepto?.subvencionabilidad === "no_subvencionable" && Number(row.importe_imputado ?? 0) !== 0) return { updated: 0, error: "Un gasto no subvencionable debe tener importe imputado 0,00 €" }; }
+    }
+  }
+  if (field === "importe_imputado" && Number(value) !== 0) {
+    const { data: selected } = await supabase.from("contabilidad").select("concepto_id").eq("club_id", clubId).in("id_contabilidad", ids);
+    const conceptIds = [...new Set((selected ?? []).map((row: any) => Number(row.concepto_id)).filter(Boolean))];
+    if (conceptIds.length) {
+      const { data: noSubvencionables } = await supabase.from("conceptos").select("id_concepto").eq("club_id", clubId).in("id_concepto", conceptIds).eq("subvencionabilidad", "no_subvencionable").limit(1);
+      if (noSubvencionables?.length) return { updated: 0, error: "Un gasto no subvencionable debe tener importe imputado 0,00 €" };
     }
   }
   const { error } = await supabase.from("contabilidad").update({ [field]: value }).eq("club_id", clubId).in("id_contabilidad", ids);

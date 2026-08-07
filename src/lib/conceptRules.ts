@@ -5,6 +5,7 @@ export type ConceptoConfigurable = {
   valido_clubes?: boolean;
   valido_eventos?: boolean;
   valido_eedd_ctd_discapacidad?: boolean;
+  subvencionabilidad?: "subvencionable" | "no_subvencionable" | "condicionada";
 };
 
 export const TIPOS_PROGRAMA: { value: TipoPrograma; label: string }[] = [
@@ -85,6 +86,8 @@ export function conceptoPermitido(tipo: TipoPrograma, concepto: string | Concept
 
 export function avisoConcepto(tipo: TipoPrograma, concepto: string | ConceptoConfigurable): string | null {
   if (!conceptoPermitido(tipo, concepto)) return "Concepto no admitido para este tipo de programa.";
+  if (typeof concepto !== "string" && concepto.subvencionabilidad === "no_subvencionable") return "Gasto no subvencionable: el importe imputado debe ser 0,00 €.";
+  if (typeof concepto !== "string" && concepto.subvencionabilidad === "condicionada") return "Gasto condicionado: revisa las condiciones de la convocatoria.";
   const conceptoNormalizado = normalizarConcepto(typeof concepto === "string" ? concepto : concepto.concepto);
   if (tipo === "eventos" && conceptoNormalizado === normalizarConcepto("Material deportivo")) return "En Eventos solo es admisible el material deportivo fungible.";
   if (tipo === "eedd_ctd_discapacidad" && conceptoNormalizado === normalizarConcepto("Servicios profesionales")) return "Debe justificarse su encaje en el apartado Otros gastos cuando proceda.";
