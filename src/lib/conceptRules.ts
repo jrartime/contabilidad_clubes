@@ -13,8 +13,21 @@ export const CONCEPTOS_OFICIALES = new Set([
   "Material de oficina", "Imprenta", "Publicidad y propaganda", "Local o sede del club", "Otros",
 ]);
 
+function normalizarConcepto(concepto: string): string {
+  return concepto
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLocaleLowerCase("es");
+}
+
+const conceptosOficialesNormalizados = new Set(
+  [...CONCEPTOS_OFICIALES].map(normalizarConcepto)
+);
+
 export function conceptoOficial(concepto: string): boolean {
-  return CONCEPTOS_OFICIALES.has(concepto.trim());
+  return conceptosOficialesNormalizados.has(normalizarConcepto(concepto));
 }
 
 const permitidos: Record<TipoPrograma, Set<string>> = {
@@ -35,17 +48,24 @@ const permitidos: Record<TipoPrograma, Set<string>> = {
   ]),
 };
 
+const permitidosNormalizados: Record<TipoPrograma, Set<string>> = {
+  clubes: new Set([...permitidos.clubes].map(normalizarConcepto)),
+  eventos: new Set([...permitidos.eventos].map(normalizarConcepto)),
+  eedd_ctd_discapacidad: new Set([...permitidos.eedd_ctd_discapacidad].map(normalizarConcepto)),
+};
+
 export function isTipoPrograma(value: unknown): value is TipoPrograma {
   return value === "clubes" || value === "eventos" || value === "eedd_ctd_discapacidad";
 }
 
 export function conceptoPermitido(tipo: TipoPrograma, concepto: string): boolean {
-  return permitidos[tipo].has(concepto.trim());
+  return permitidosNormalizados[tipo].has(normalizarConcepto(concepto));
 }
 
 export function avisoConcepto(tipo: TipoPrograma, concepto: string): string | null {
   if (!conceptoPermitido(tipo, concepto)) return "Concepto no admitido para este tipo de programa.";
-  if (tipo === "eventos" && concepto === "Material deportivo") return "En Eventos solo es admisible el material deportivo fungible.";
-  if (tipo === "eedd_ctd_discapacidad" && concepto === "Servicios profesionales") return "Debe justificarse su encaje en el apartado Otros cuando proceda.";
+  const conceptoNormalizado = normalizarConcepto(concepto);
+  if (tipo === "eventos" && conceptoNormalizado === normalizarConcepto("Material deportivo")) return "En Eventos solo es admisible el material deportivo fungible.";
+  if (tipo === "eedd_ctd_discapacidad" && conceptoNormalizado === normalizarConcepto("Servicios profesionales")) return "Debe justificarse su encaje en el apartado Otros cuando proceda.";
   return null;
 }
