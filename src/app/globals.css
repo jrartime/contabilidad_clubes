@@ -440,45 +440,62 @@ button.icon-button-danger:hover {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 10px;
   align-items: end;
-  margin: 12px 0 16px;
+  margin: 10px 0 14px;
 }
 
 .filter-field {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .filter-field span {
   color: #101828;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
 }
 
+.filter-field input,
+.filter-field select {
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+/* El control ocupa todo el ancho; la X de limpiar se superpone dentro. */
 .filter-control-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+  position: relative;
+  display: flex;
+}
+
+.filter-control-row input {
+  width: 100%;
+  padding-right: 26px;
+}
+
+/* Se oculta la X nativa del navegador en type="search" para no duplicarla con la propia. */
+.filter-control-row input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .filter-reset-button,
 .app-main a.filter-reset-button {
   display: inline-flex;
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--muted);
   background: #ffffff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   text-decoration: none;
 }
@@ -488,6 +505,39 @@ button.icon-button-danger:hover {
   color: var(--foreground);
   background: #f3f4f6;
   text-decoration: none;
+}
+
+/* Dentro de un control, la X queda oculta hasta pasar el ratón o enfocar el campo. */
+.filter-control-row .filter-reset-button,
+.app-main .filter-control-row a.filter-reset-button {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  transform: translateY(-50%);
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease, background .12s ease;
+}
+
+.filter-control-row:hover .filter-reset-button,
+.filter-control-row:focus-within .filter-reset-button,
+.app-main .filter-control-row:hover a.filter-reset-button,
+.app-main .filter-control-row:focus-within a.filter-reset-button {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.filter-control-row .filter-reset-button:hover,
+.app-main .filter-control-row a.filter-reset-button:hover {
+  background: #e5e9f0;
+  color: var(--foreground);
 }
 
 .table-sort-button,
@@ -522,62 +572,13 @@ button.icon-button-danger:hover {
   font-weight: 800;
 }
 
-.contabilidad-filters {
-  grid-template-columns:
-    156px
-    156px
-    repeat(4, minmax(160px, 1fr));
-  gap: 10px;
-}
-
-.contabilidad-filters .filter-control-row {
-  gap: 6px;
-}
-
 .contabilidad-filters input[type="date"] {
   min-width: 0;
-  padding: 0 8px;
-}
-
-.contabilidad-filters .filter-field-date {
-  width: 156px;
-}
-
-.contabilidad-filters .filter-field-date .filter-control-row {
-  grid-template-columns: 120px 30px;
-}
-
-.contabilidad-filters .filter-field-date input[type="date"] {
-  width: 120px;
-}
-
-.contabilidad-filters .filter-reset-button,
-.app-main .contabilidad-filters a.filter-reset-button {
-  width: 30px;
-  min-width: 30px;
-}
-
-@media (max-width: 1000px) {
-  .filters-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 700px) {
   .filters-grid {
     grid-template-columns: 1fr;
-  }
-
-  .contabilidad-filters .filter-field-date {
-    width: auto;
-  }
-
-  .contabilidad-filters .filter-field-date .filter-control-row {
-    grid-template-columns: minmax(0, 1fr) 30px;
-  }
-
-  .contabilidad-filters .filter-field-date input[type="date"] {
-    width: 100%;
   }
 }
 

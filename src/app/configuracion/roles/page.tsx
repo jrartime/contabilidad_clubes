@@ -40,6 +40,11 @@ const PERMISSIONS: Permission[] = [
     roles: ["owner", "admin"],
   },
   {
+    label: "Editar datos del club",
+    description: "Modificar nombre, NIF, dirección, email y teléfono del club",
+    roles: ["owner", "admin"],
+  },
+  {
     label: "Invitar usuarios",
     description: "Enviar invitaciones por email a nuevos usuarios",
     roles: ["owner", "admin"],

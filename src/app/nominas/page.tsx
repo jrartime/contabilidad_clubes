@@ -423,6 +423,7 @@ export default async function NominasPage({
   const entidadesPromise = supabase
     .from("entidades")
     .select("id_entidad, entidad")
+    .eq("club_id", clubId)
     .order("entidad", { ascending: true });
 
   // Programas primero (solo activos) para filtrar la query principal

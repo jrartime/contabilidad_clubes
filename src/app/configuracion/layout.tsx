@@ -3,10 +3,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const SUBTABS = [
+  { href: "/configuracion/club", label: "Datos del club" },
+  { href: "/configuracion/subvenciones", label: "Subvenciones" },
   { href: "/configuracion/proveedores", label: "Proveedores" },
   { href: "/configuracion/programas", label: "Programas" },
   { href: "/configuracion/personal", label: "Personal" },
   { href: "/configuracion/conceptos", label: "Conceptos" },
+  { href: "/configuracion/tipos", label: "Tipos" },
+  { href: "/configuracion/entidades", label: "Entidades" },
   { href: "/configuracion/miembros", label: "Miembros" },
   { href: "/configuracion/roles", label: "Roles" },
 ];

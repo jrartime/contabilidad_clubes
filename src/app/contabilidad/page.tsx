@@ -274,6 +274,8 @@ export default async function ContabilidadPage({
     proveedor_id?: string;
     personal_id?: string;
     tipo_id?: string;
+    categoria_id?: string;
+    concepto_id?: string;
     fecha_desde?: string;
     fecha_hasta?: string;
     page?: string;
@@ -310,6 +312,10 @@ export default async function ContabilidadPage({
     !!personalFilterId && Number.isFinite(personalFilterId);
   const tipoFilterId = sp.tipo_id ? Number(sp.tipo_id) : null;
   const hasTipoFilter = !!tipoFilterId && Number.isFinite(tipoFilterId);
+  const categoriaFilterId = sp.categoria_id ? Number(sp.categoria_id) : null;
+  const hasCategoriaFilter = !!categoriaFilterId && Number.isFinite(categoriaFilterId);
+  const conceptoFilterId = sp.concepto_id ? Number(sp.concepto_id) : null;
+  const hasConceptoFilter = !!conceptoFilterId && Number.isFinite(conceptoFilterId);
   const fechaDesde = String(sp.fecha_desde ?? "").trim();
   const fechaHasta = String(sp.fecha_hasta ?? "").trim();
   const buscar = String(sp.buscar ?? "").trim();
@@ -334,6 +340,8 @@ export default async function ContabilidadPage({
   if (hasProveedorFilter) exportParams.set("proveedor_id", String(proveedorFilterId));
   if (hasPersonalFilter) exportParams.set("personal_id", String(personalFilterId));
   if (hasTipoFilter) exportParams.set("tipo_id", String(tipoFilterId));
+  if (hasCategoriaFilter) exportParams.set("categoria_id", String(categoriaFilterId));
+  if (hasConceptoFilter) exportParams.set("concepto_id", String(conceptoFilterId));
   if (fechaDesde) exportParams.set("fecha_desde", fechaDesde);
   if (fechaHasta) exportParams.set("fecha_hasta", fechaHasta);
   if (buscar) exportParams.set("buscar", buscar);
@@ -358,7 +366,7 @@ export default async function ContabilidadPage({
   // Query de totales: mismos filtros que la principal, sin limit, solo campos necesarios
   let totalsQ = supabase
     .from("contabilidad")
-    .select("importe_total, importe_imputado, categoria_id")
+    .select("importe_total, importe_imputado, categoria_id, programa_id, concepto_id")
     .eq("club_id", clubId);
   if (hasProgramaFilter) {
     totalsQ = isProgramaNoneFilter
@@ -374,6 +382,8 @@ export default async function ContabilidadPage({
   if (hasProveedorFilter) totalsQ = totalsQ.eq("proveedor_id", proveedorFilterId);
   if (hasPersonalFilter) totalsQ = totalsQ.eq("personal_id", personalFilterId);
   if (hasTipoFilter) totalsQ = totalsQ.eq("tipo_id", tipoFilterId);
+  if (hasCategoriaFilter) totalsQ = totalsQ.eq("categoria_id", categoriaFilterId);
+  if (hasConceptoFilter) totalsQ = totalsQ.eq("concepto_id", conceptoFilterId);
   if (fechaDesde) totalsQ = totalsQ.gte("fecha", fechaDesde);
   if (fechaHasta) totalsQ = totalsQ.lte("fecha", fechaHasta);
   const totalsPromise = totalsQ;
@@ -401,6 +411,7 @@ export default async function ContabilidadPage({
   const entidadesPromise = supabase
     .from("entidades")
     .select("id_entidad, entidad")
+    .eq("club_id", clubId)
     .order("entidad", { ascending: true });
 
   const personalPromise = supabase
@@ -457,12 +468,14 @@ export default async function ContabilidadPage({
   }
   if (hasPersonalFilter) q = q.eq("personal_id", personalFilterId);
   if (hasTipoFilter) q = q.eq("tipo_id", tipoFilterId);
+  if (hasCategoriaFilter) q = q.eq("categoria_id", categoriaFilterId);
+  if (hasConceptoFilter) q = q.eq("concepto_id", conceptoFilterId);
   if (fechaDesde) q = q.gte("fecha", fechaDesde);
   if (fechaHasta) q = q.lte("fecha", fechaHasta);
 
   let filterOptionsQ = supabase
     .from("contabilidad")
-    .select("tipo_id, proveedor_id, personal_id, programa_id")
+    .select("tipo_id, proveedor_id, personal_id, programa_id, categoria_id, concepto_id")
     .eq("club_id", clubId);
 
   if (hasProgramaFilter) {
@@ -477,6 +490,8 @@ export default async function ContabilidadPage({
   if (hasProveedorFilter) filterOptionsQ = filterOptionsQ.eq("proveedor_id", proveedorFilterId);
   if (hasPersonalFilter) filterOptionsQ = filterOptionsQ.eq("personal_id", personalFilterId);
   if (hasTipoFilter) filterOptionsQ = filterOptionsQ.eq("tipo_id", tipoFilterId);
+  if (hasCategoriaFilter) filterOptionsQ = filterOptionsQ.eq("categoria_id", categoriaFilterId);
+  if (hasConceptoFilter) filterOptionsQ = filterOptionsQ.eq("concepto_id", conceptoFilterId);
   if (fechaDesde) filterOptionsQ = filterOptionsQ.gte("fecha", fechaDesde);
   if (fechaHasta) filterOptionsQ = filterOptionsQ.lte("fecha", fechaHasta);
   const filterOptionsPromise = filterOptionsQ;
@@ -528,10 +543,14 @@ export default async function ContabilidadPage({
   const availablePersonalIds = new Set(filterOptionRowsAny.map((r) => Number(r.personal_id)).filter(Number.isFinite));
   const availableProgramaIds = new Set(filterOptionRowsAny.map((r) => Number(r.programa_id)).filter(Number.isFinite));
   const hasAvailableNoPrograma = filterOptionRowsAny.some((r) => r.programa_id == null);
+  const availableCategoriaIds = new Set(filterOptionRowsAny.map((r) => Number(r.categoria_id)).filter(Number.isFinite));
+  const availableConceptoIds = new Set(filterOptionRowsAny.map((r) => Number(r.concepto_id)).filter(Number.isFinite));
   const filterTipos = (tipos ?? []).filter((t: any) => availableTipoIds.has(Number(t.id_tipo)) || Number(t.id_tipo) === tipoFilterId);
   const filterProveedores = (proveedores ?? []).filter((p: any) => availableProveedorIds.has(Number(p.id_proveedor)) || Number(p.id_proveedor) === proveedorFilterId);
   const filterPersonal = (personal ?? []).filter((p: any) => availablePersonalIds.has(Number(p.id_personal)) || Number(p.id_personal) === personalFilterId);
   const filterProgramas = (programas ?? []).filter((p: any) => availableProgramaIds.has(Number(p.id_programa)) || Number(p.id_programa) === programaFilterId);
+  const filterCategorias = (categorias ?? []).filter((c: any) => availableCategoriaIds.has(Number(c.id_categoria)) || Number(c.id_categoria) === categoriaFilterId);
+  const filterConceptos = (conceptos ?? []).filter((c: any) => availableConceptoIds.has(Number(c.id_concepto)) || Number(c.id_concepto) === conceptoFilterId);
 
 type Tot = { total: number; imputado: number; count: number };
 
@@ -587,6 +606,68 @@ const totales = totalsSource.reduce(
 
 const totalCount = buscar ? searchedRows.length : (totalsRows?.length ?? 0);
 const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+// ===============================
+// Informe por programa y concepto: agrega totalsSource (ya filtrado según
+// los filtros activos, buscar incluido) por programa y, dentro, por concepto.
+// ===============================
+const programaLabelMap = new Map(
+  (programas ?? []).map((p: any) => [Number(p.id_programa), `${p.anio ? `[${p.anio}] ` : ""}${p.programa}`])
+);
+type InformeConceptoRow = { key: string; label: string; count: number; total: number; imputado: number };
+type InformeProgramaGroup = InformeConceptoRow & { conceptos: InformeConceptoRow[] };
+const informeMap = new Map<
+  string,
+  { label: string; count: number; total: number; imputado: number; conceptos: Map<string, InformeConceptoRow> }
+>();
+for (const r of totalsSource as any[]) {
+  const total = Number(r.importe_total ?? 0) || 0;
+  const imputado = Number(r.importe_imputado ?? 0) || 0;
+
+  const pid = r.programa_id != null ? Number(r.programa_id) : null;
+  const pKey = pid != null ? String(pid) : "none";
+  let pGrupo = informeMap.get(pKey);
+  if (!pGrupo) {
+    pGrupo = {
+      label: pid != null ? programaLabelMap.get(pid) ?? `Programa #${pid}` : "(sin programa)",
+      count: 0,
+      total: 0,
+      imputado: 0,
+      conceptos: new Map(),
+    };
+    informeMap.set(pKey, pGrupo);
+  }
+  pGrupo.count += 1;
+  pGrupo.total += total;
+  pGrupo.imputado += imputado;
+
+  const cid = r.concepto_id != null ? Number(r.concepto_id) : null;
+  const cKey = cid != null ? String(cid) : "none";
+  let cFila = pGrupo.conceptos.get(cKey);
+  if (!cFila) {
+    cFila = {
+      key: cKey,
+      label: cid != null ? conceptoSearchMap.get(cid) ?? `Concepto #${cid}` : "(sin concepto)",
+      count: 0,
+      total: 0,
+      imputado: 0,
+    };
+    pGrupo.conceptos.set(cKey, cFila);
+  }
+  cFila.count += 1;
+  cFila.total += total;
+  cFila.imputado += imputado;
+}
+const informePorPrograma: InformeProgramaGroup[] = Array.from(informeMap.entries())
+  .map(([key, g]) => ({
+    key,
+    label: g.label,
+    count: g.count,
+    total: g.total,
+    imputado: g.imputado,
+    conceptos: Array.from(g.conceptos.values()).sort((a, b) => a.label.localeCompare(b.label, "es")),
+  }))
+  .sort((a, b) => a.label.localeCompare(b.label, "es"));
 
 // ===============================
 // Control de subvención del programa seleccionado
@@ -1128,6 +1209,20 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
             {filterProgramas.map((p: any) => <option key={p.id_programa} value={p.id_programa}>{p.anio ? `[${p.anio}] ` : ""}{p.programa}</option>)}
           </select>
         </label>
+        <label className="filter-field">
+          <span>Categoría</span>
+          <select name="categoria_id" defaultValue={hasCategoriaFilter ? String(categoriaFilterId) : ""}>
+            <option value="">Todas</option>
+            {filterCategorias.map((c: any) => <option key={c.id_categoria} value={c.id_categoria}>{c.categoria}</option>)}
+          </select>
+        </label>
+        <label className="filter-field">
+          <span>Concepto</span>
+          <select name="concepto_id" defaultValue={hasConceptoFilter ? String(conceptoFilterId) : ""}>
+            <option value="">Todos</option>
+            {filterConceptos.map((c: any) => <option key={c.id_concepto} value={c.id_concepto}>{c.concepto}</option>)}
+          </select>
+        </label>
       </AutoSubmitFilters>
 
       <div className="conta-filter" style={{ display: "none" }}>
@@ -1344,6 +1439,45 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
     </div>
   </div>
 
+      <details className="conta-informe">
+        <summary>Informe por programa y concepto</summary>
+        <div className="conta-informe-body">
+          {informePorPrograma.length ? (
+            informePorPrograma.map((grupo) => (
+              <div key={grupo.key} className="conta-informe-programa">
+                <div className="conta-informe-programa-header">
+                  <strong>{grupo.label}</strong>
+                  <span>{grupo.count} · Total {formatDecimal(grupo.total)} € · Imputado {formatDecimal(grupo.imputado)} €</span>
+                </div>
+                <table className="conta-informe-table">
+                  <thead>
+                    <tr><th>Concepto</th><th>Nº</th><th>Total</th><th>Imputado</th></tr>
+                  </thead>
+                  <tbody>
+                    {grupo.conceptos.map((c) => (
+                      <tr key={c.key}>
+                        <td>{c.label}</td>
+                        <td>{c.count}</td>
+                        <td>{formatDecimal(c.total)} €</td>
+                        <td>{formatDecimal(c.imputado)} €</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          ) : (
+            <p className="conta-informe-empty">No hay movimientos para los filtros aplicados.</p>
+          )}
+          {informePorPrograma.length ? (
+            <div className="conta-informe-total">
+              <span>Total general ({totales.global.count})</span>
+              <strong>{formatDecimal(totales.global.total)} € · Imputado {formatDecimal(totales.global.imputado)} €</strong>
+            </div>
+          ) : null}
+        </div>
+      </details>
+
       <ContabilidadTable
         initialRows={rowsAny as any}
         canEdit={canUserEdit}
@@ -1396,6 +1530,97 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
       })()}
 
       <style>{`
+        .conta-informe {
+          margin-top: 14px;
+          border: 1px solid #ddd;
+          border-radius: 10px;
+          padding: 0 12px 12px;
+        }
+
+        .conta-informe > summary {
+          cursor: pointer;
+          padding: 10px 0;
+          font-weight: 700;
+          list-style: none;
+        }
+
+        .conta-informe > summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .conta-informe > summary::before {
+          content: "▸";
+          display: inline-block;
+          margin-right: 6px;
+          transition: transform .12s ease;
+        }
+
+        .conta-informe[open] > summary::before {
+          transform: rotate(90deg);
+        }
+
+        .conta-informe-body {
+          display: grid;
+          gap: 14px;
+          padding-top: 4px;
+        }
+
+        .conta-informe-programa {
+          border: 1px solid #eee;
+          border-radius: 8px;
+          padding: 10px;
+        }
+
+        .conta-informe-programa-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 8px;
+          font-size: 13px;
+        }
+
+        .conta-informe-programa-header span {
+          color: var(--muted);
+          font-weight: 600;
+        }
+
+        .conta-informe-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+        }
+
+        .conta-informe-table th,
+        .conta-informe-table td {
+          padding: 6px 8px;
+          border-bottom: 1px solid #eee;
+          text-align: left;
+        }
+
+        .conta-informe-table th:not(:first-child),
+        .conta-informe-table td:not(:first-child) {
+          text-align: right;
+        }
+
+        .conta-informe-total {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 12px;
+          border: 1px solid #ddd;
+          border-radius: 8px;
+          background: #f8fafc;
+          font-size: 13px;
+        }
+
+        .conta-informe-empty {
+          margin: 0;
+          color: var(--muted);
+          font-size: 13px;
+        }
+
         @media (max-width: 1000px) {
           .conta-form-row-one,
           .conta-form-row-two {

@@ -7,6 +7,8 @@ export type ProgramaPresupuestoItem = {
   programa: string;
   anio: number | null;
   activo: boolean;
+  /** Se conserva para comprobar en servidor la compatibilidad previa al cierre. */
+  tipo_programa: string | null;
 };
 
 export type ProgramaCompatibleOption = {

@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -212,27 +212,42 @@ export type Database = {
           created_at: string
           direccion: string | null
           email: string | null
+          iban: string | null
           id_club: number
           nif: string | null
           nombre: string
+          presidente_dni: string | null
+          presidente_nombre: string | null
+          representante_dni: string | null
+          representante_nombre: string | null
           telefono: string | null
         }
         Insert: {
           created_at?: string
           direccion?: string | null
           email?: string | null
+          iban?: string | null
           id_club?: number
           nif?: string | null
           nombre: string
+          presidente_dni?: string | null
+          presidente_nombre?: string | null
+          representante_dni?: string | null
+          representante_nombre?: string | null
           telefono?: string | null
         }
         Update: {
           created_at?: string
           direccion?: string | null
           email?: string | null
+          iban?: string | null
           id_club?: number
           nif?: string | null
           nombre?: string
+          presidente_dni?: string | null
+          presidente_nombre?: string | null
+          representante_dni?: string | null
+          representante_nombre?: string | null
           telefono?: string | null
         }
         Relationships: []

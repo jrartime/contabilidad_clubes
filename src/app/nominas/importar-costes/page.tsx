@@ -52,6 +52,7 @@ export default async function ImportarCostesPage() {
     supabase
       .from("entidades")
       .select("id_entidad, entidad")
+      .eq("club_id", clubId)
       .order("entidad", { ascending: true }),
     supabase
       .from("proveedores")

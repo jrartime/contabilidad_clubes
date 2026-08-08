@@ -95,6 +95,67 @@ function readableDatabaseError(message: string) {
   return message;
 }
 
+/**
+ * Traduce los rechazos funcionales del trigger de cierre y los conflictos de
+ * concurrencia. PostgreSQL sigue siendo la autoridad: esta función solo
+ * convierte su resultado en un mensaje comprensible para la interfaz.
+ */
+function readableCloseError(error: unknown) {
+  const code = error && typeof error === "object" && "code" in error
+    ? String(error.code ?? "")
+    : "";
+  const rawMessage = error && typeof error === "object" && "message" in error
+    ? String(error.message ?? "")
+    : error instanceof Error
+      ? error.message
+      : "";
+  const message = rawMessage.toLocaleLowerCase("es");
+
+  if (code === "40P01") {
+    return "El presupuesto está siendo modificado en otra sesión. Inténtalo de nuevo.";
+  }
+  if (message.includes("no contiene programas") || message.includes("sin programas")) {
+    return "Incluye al menos un programa contable antes de cerrar el presupuesto.";
+  }
+  if (message.includes("no contiene partidas") || message.includes("sin partidas")) {
+    return "Añade al menos una partida antes de cerrar el presupuesto.";
+  }
+  if (message.includes("no subvencionable")) {
+    return "Un presupuesto vinculado a subvención no puede cerrarse con conceptos no subvencionables.";
+  }
+  if (
+    message.includes("subvenci") &&
+    (message.includes("no está vinculado") || message.includes("no incluye"))
+  ) {
+    return "Todos los programas deben seguir vinculados a la subvención antes de cerrar.";
+  }
+  if (message.includes("programa") && message.includes("incompatib")) {
+    return "Hay programas incompatibles con el tipo o el periodo del presupuesto.";
+  }
+  if (message.includes("concepto") && message.includes("incompatib")) {
+    return "Hay conceptos incompatibles con el tipo del presupuesto.";
+  }
+  if (message.includes("snapshot")) {
+    return "No se pudo congelar la información histórica de todas las partidas. Revisa sus conceptos.";
+  }
+  if (
+    message.includes("total de gastos") ||
+    message.includes("total gastos") ||
+    message.includes("total de ingresos") ||
+    message.includes("total ingresos") ||
+    message.includes("equilibr") ||
+    message.includes("descuadr")
+  ) {
+    // El trigger incluye los totales encontrados; se conservan porque ayudan a corregir el borrador.
+    return rawMessage || "Los gastos e ingresos deben ser positivos y tener el mismo total.";
+  }
+  if (message.includes("cerrado") || message.includes("borrador") || message.includes("inmutable")) {
+    return "El presupuesto ya no está disponible como borrador; vuelve a cargar su estado.";
+  }
+
+  return rawMessage || "PostgreSQL rechazó el cierre del presupuesto.";
+}
+
 /** Convierte un entero obligatorio y rechaza valores parciales o no numéricos. */
 function parseInteger(value: FormDataEntryValue | null, label: string) {
   const raw = String(value ?? "").trim();
@@ -621,5 +682,44 @@ export async function removePresupuestoPartidaAction(formData: FormData) {
     if (error && typeof error === "object" && "digest" in error) throw error;
     const message = error instanceof Error ? error.message : "No se pudo eliminar la partida.";
     redirect(withMessage(returnPath, "error", message, true));
+  }
+}
+
+/**
+ * Cierra la cabecera con un único UPDATE de estado. La acción no escribe
+ * cerrado_at ni snapshots: el trigger SQL los genera atómicamente y vuelve a
+ * validar programas, partidas, equilibrio y subvencionabilidad frente a
+ * cambios que pudieran ocurrir después de renderizar la pantalla.
+ */
+export async function closePresupuestoAction(formData: FormData) {
+  const returnPath = safeReturnPath(formData.get("return_to"));
+  try {
+    const { supabase, clubId } = await requireEditableContext();
+    const presupuestoId = parseInteger(formData.get("presupuesto_id"), "El presupuesto");
+
+    // La lectura previa mejora los mensajes y mantiene el aislamiento por club;
+    // no sustituye en ningún caso las validaciones transaccionales de PostgreSQL.
+    await requireDraftPresupuesto(supabase, clubId, presupuestoId);
+
+    const { data: closed, error } = await supabase
+      .from("presupuestos")
+      .update({ estado: "cerrado" })
+      .eq("club_id", clubId)
+      .eq("id_presupuesto", presupuestoId)
+      .eq("estado", "borrador")
+      .select("id_presupuesto, estado, cerrado_at")
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!closed) {
+      throw new Error("El presupuesto ya no está disponible como borrador; vuelve a cargar su estado.");
+    }
+
+    revalidatePath("/presupuestos");
+    redirect(withMessage(returnPath, "success", "Presupuesto cerrado correctamente.", true));
+  } catch (error) {
+    // redirect() usa una excepción interna que debe seguir gestionando Next.js.
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    redirect(withMessage(returnPath, "error", readableCloseError(error), true));
   }
 }
