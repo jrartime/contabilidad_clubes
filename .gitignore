@@ -43,3 +43,6 @@ next-env.d.ts
 
 # archivos locales
 *.zip
+
+# documentos de referencia locales (bases de convocatorias, etc.)
+/docs/convocatorias/
