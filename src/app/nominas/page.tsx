@@ -12,9 +12,9 @@ import { matchesGlobalSearch } from "@/lib/search";
 import NominaForm from "./NominaForm";
 import NominasTable from "./NominasTable";
 import { normalizeDecimalString, parseDecimalToNumber } from "@/lib/decimal";
-import { formatDecimal } from "@/lib/format";
+import { formatDateEs, formatDecimal } from "@/lib/format";
 import { SubsidyExecutionSummary } from "@/components/SubsidyExecutionSummary";
-import { getSubsidyExecutionTotals } from "@/lib/subsidyExecution";
+import { getProgramaPeriodo, getSubsidyExecutionTotals } from "@/lib/subsidyExecution";
 import {
   deleteContabilidadWithDocsAction,
   deleteDocumentoAction,
@@ -667,8 +667,14 @@ export default async function NominasPage({
     hasProgramaFilter && !isProgramaNoneFilter
       ? (programas ?? []).find((p: any) => Number(p.id_programa) === Number(programaFilterId))
       : null;
+  const programaPeriodo = programaSeleccionado
+    ? await getProgramaPeriodo(supabase, clubId, Number(programaSeleccionado.id_programa))
+    : null;
   const subsidyExecution = programaSeleccionado
-    ? await getSubsidyExecutionTotals(supabase, clubId, Number(programaSeleccionado.id_programa))
+    ? await getSubsidyExecutionTotals(supabase, clubId, Number(programaSeleccionado.id_programa), {
+        fechaInicio: programaPeriodo?.fecha_inicio_periodo,
+        fechaFin: programaPeriodo?.fecha_fin_periodo,
+      })
     : null;
 
   // Edit row
@@ -1178,10 +1184,15 @@ export default async function NominasPage({
         <SubsidyExecutionSummary
           programa={programaSeleccionado.programa}
           anio={programaSeleccionado.anio}
-          subvencion={Number(programaSeleccionado.subvencion ?? 0) || 0}
+          subvencion={Number(programaPeriodo?.presupuesto_previsto ?? programaSeleccionado.subvencion ?? 0) || 0}
           ingresosBanco={subsidyExecution.ingresosBanco}
           ejecutado={subsidyExecution.ejecutado}
-          fechaLimite={programaSeleccionado.fecha_limite}
+          fechaLimite={programaPeriodo?.fecha_limite_justificacion ?? programaSeleccionado.fecha_limite}
+          periodoLabel={
+            programaPeriodo?.fecha_inicio_periodo || programaPeriodo?.fecha_fin_periodo
+              ? `Periodo: ${formatDateEs(programaPeriodo.fecha_inicio_periodo)} - ${formatDateEs(programaPeriodo.fecha_fin_periodo)}`
+              : null
+          }
         />
       ) : null}
 

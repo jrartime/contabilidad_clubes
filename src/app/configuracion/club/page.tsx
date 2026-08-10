@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getActiveClubId } from "@/lib/club";
 import { canManageMembers, getMyClubRole } from "@/lib/clubRole";
 import { Icon } from "@/components/Icon";
+import { toDateInputValue } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -33,6 +34,8 @@ async function updateClubAction(formData: FormData) {
   const payload = {
     nombre,
     nif: toText(formData.get("nif")),
+    numero_registro: toText(formData.get("numero_registro")),
+    fecha_constitucion: toText(formData.get("fecha_constitucion")),
     direccion: toText(formData.get("direccion")),
     email: toText(formData.get("email")),
     telefono: toText(formData.get("telefono")),
@@ -78,7 +81,7 @@ export default async function ClubDataPage({
   const { data: club, error } = await supabase
     .from("clubes")
     .select(
-      "id_club, nombre, nif, direccion, email, telefono, iban, presidente_nombre, presidente_dni, representante_nombre, representante_dni"
+      "id_club, nombre, nif, numero_registro, fecha_constitucion, direccion, email, telefono, iban, presidente_nombre, presidente_dni, representante_nombre, representante_dni"
     )
     .eq("id_club", clubId)
     .maybeSingle();
@@ -141,12 +144,23 @@ export default async function ClubDataPage({
 
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
           <label>
-            NIF
+            CIF
             <input name="nif" defaultValue={club?.nif ?? ""} style={{ width: "100%" }} />
           </label>
           <label>
             Teléfono
             <input name="telefono" defaultValue={club?.telefono ?? ""} style={{ width: "100%" }} />
+          </label>
+        </div>
+
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+          <label>
+            Nº de registro (Principado de Asturias)
+            <input name="numero_registro" defaultValue={club?.numero_registro ?? ""} style={{ width: "100%" }} />
+          </label>
+          <label>
+            Fecha de constitución
+            <input name="fecha_constitucion" type="date" defaultValue={toDateInputValue(club?.fecha_constitucion)} style={{ width: "100%" }} />
           </label>
         </div>
 

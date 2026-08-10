@@ -18,7 +18,7 @@ import { deleteBancoAction } from "./actions";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
 import { buildFilterHref } from "@/lib/filters";
 import { SubsidyExecutionSummary } from "@/components/SubsidyExecutionSummary";
-import { getSubsidyExecutionTotals } from "@/lib/subsidyExecution";
+import { getProgramaPeriodo, getSubsidyExecutionTotals } from "@/lib/subsidyExecution";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -499,8 +499,14 @@ export default async function BancosPage({
     hasProgramaFilter && !isProgramaNoneFilter
       ? (programas ?? []).find((p: any) => Number(p.id_programa) === Number(programaFilterId))
       : null;
+  const programaPeriodo = programaSeleccionado
+    ? await getProgramaPeriodo(supabase, clubId, Number(programaSeleccionado.id_programa))
+    : null;
   const subsidyExecution = programaSeleccionado
-    ? await getSubsidyExecutionTotals(supabase, clubId, Number(programaSeleccionado.id_programa))
+    ? await getSubsidyExecutionTotals(supabase, clubId, Number(programaSeleccionado.id_programa), {
+        fechaInicio: programaPeriodo?.fecha_inicio_periodo,
+        fechaFin: programaPeriodo?.fecha_fin_periodo,
+      })
     : null;
 
   let editRow: any =
@@ -1002,10 +1008,15 @@ export default async function BancosPage({
         <SubsidyExecutionSummary
           programa={programaSeleccionado.programa}
           anio={programaSeleccionado.anio}
-          subvencion={Number(programaSeleccionado.subvencion ?? 0) || 0}
+          subvencion={Number(programaPeriodo?.presupuesto_previsto ?? programaSeleccionado.subvencion ?? 0) || 0}
           ingresosBanco={subsidyExecution.ingresosBanco}
           ejecutado={subsidyExecution.ejecutado}
-          fechaLimite={programaSeleccionado.fecha_limite}
+          fechaLimite={programaPeriodo?.fecha_limite_justificacion ?? programaSeleccionado.fecha_limite}
+          periodoLabel={
+            programaPeriodo?.fecha_inicio_periodo || programaPeriodo?.fecha_fin_periodo
+              ? `Periodo: ${formatDateEs(programaPeriodo.fecha_inicio_periodo)} - ${formatDateEs(programaPeriodo.fecha_fin_periodo)}`
+              : null
+          }
         />
       ) : null}
 

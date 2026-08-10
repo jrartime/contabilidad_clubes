@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 
 const SUBTABS = [
   { href: "/configuracion/club", label: "Datos del club" },
+  { href: "/configuracion/junta-directiva", label: "Junta directiva" },
   { href: "/configuracion/subvenciones", label: "Subvenciones" },
   { href: "/configuracion/proveedores", label: "Proveedores" },
   { href: "/configuracion/programas", label: "Programas" },

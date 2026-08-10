@@ -6,12 +6,12 @@ import { Icon } from "@/components/Icon";
 export function FileDropUpload({
   action,
   clubId,
-  contabilidadId,
+  hiddenFields,
   redirectTo,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   clubId: number;
-  contabilidadId: number;
+  hiddenFields: Record<string, string | number>;
   redirectTo: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -33,7 +33,9 @@ export function FileDropUpload({
   return (
     <form action={action} style={{ display: "grid", gap: 8 }}>
       <input type="hidden" name="club_id" value={clubId} />
-      <input type="hidden" name="contabilidad_id" value={contabilidadId} />
+      {Object.entries(hiddenFields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <input type="hidden" name="redirect_to" value={redirectTo} />
       <label
         onDragEnter={(event) => {

@@ -723,3 +723,91 @@ export async function closePresupuestoAction(formData: FormData) {
     redirect(withMessage(returnPath, "error", readableCloseError(error), true));
   }
 }
+
+/**
+ * Reabre una cabecera cerrada (cerrado -> borrador). Es la única transición
+ * que el trigger admite sobre un presupuesto cerrado; no acepta cambiar
+ * ningún otro campo en el mismo UPDATE. Tras reabrirlo, la cabecera vuelve a
+ * seguir las reglas normales de un borrador (editable y eliminable).
+ */
+export async function reopenPresupuestoAction(formData: FormData) {
+  const returnPath = safeReturnPath(formData.get("return_to"));
+  try {
+    const { supabase, clubId } = await requireEditableContext();
+    const presupuestoId = parseInteger(formData.get("presupuesto_id"), "El presupuesto");
+
+    const { data: current, error: currentError } = await supabase
+      .from("presupuestos")
+      .select("id_presupuesto, estado")
+      .eq("club_id", clubId)
+      .eq("id_presupuesto", presupuestoId)
+      .maybeSingle();
+    if (currentError) throw new Error(currentError.message);
+    if (!current) throw new Error("El presupuesto no existe en el club activo.");
+    if (current.estado !== "cerrado") throw new Error("El presupuesto no está cerrado.");
+
+    const { data: reopened, error } = await supabase
+      .from("presupuestos")
+      .update({ estado: "borrador" })
+      .eq("club_id", clubId)
+      .eq("id_presupuesto", presupuestoId)
+      .eq("estado", "cerrado")
+      .select("id_presupuesto")
+      .maybeSingle();
+    if (error) throw new Error(readableCloseError(error));
+    if (!reopened) throw new Error("El presupuesto ya no estaba disponible para reabrir.");
+
+    revalidatePath("/presupuestos");
+    redirect(withMessage(returnPath, "success", "Presupuesto reabierto. Ya puedes editarlo.", true));
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    const message = error instanceof Error ? error.message : "No se pudo reabrir el presupuesto.";
+    redirect(withMessage(returnPath, "error", message, true));
+  }
+}
+
+/**
+ * Elimina un presupuesto en borrador junto con sus programas y partidas. Un
+ * presupuesto cerrado debe reabrirse primero: el trigger lo rechaza mientras
+ * siga cerrado, así que aquí solo se repite esa comprobación para dar un
+ * mensaje claro antes de intentarlo.
+ */
+export async function deletePresupuestoAction(formData: FormData) {
+  try {
+    const { supabase, clubId } = await requireEditableContext();
+    const presupuestoId = parseInteger(formData.get("presupuesto_id"), "El presupuesto");
+    await requireDraftPresupuesto(supabase, clubId, presupuestoId);
+
+    const { error: partidasError } = await supabase
+      .from("presupuesto_partidas")
+      .delete()
+      .eq("club_id", clubId)
+      .eq("presupuesto_id", presupuestoId);
+    if (partidasError) throw new Error(partidasError.message);
+
+    const { error: programasError } = await supabase
+      .from("presupuesto_programas")
+      .delete()
+      .eq("club_id", clubId)
+      .eq("presupuesto_id", presupuestoId);
+    if (programasError) throw new Error(programasError.message);
+
+    const { data: deleted, error } = await supabase
+      .from("presupuestos")
+      .delete()
+      .eq("club_id", clubId)
+      .eq("id_presupuesto", presupuestoId)
+      .eq("estado", "borrador")
+      .select("id_presupuesto")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!deleted) throw new Error("El presupuesto ya no estaba disponible como borrador.");
+
+    revalidatePath("/presupuestos");
+    redirect(`/presupuestos?success=${encodeURIComponent("Presupuesto eliminado.")}`);
+  } catch (error) {
+    if (error && typeof error === "object" && "digest" in error) throw error;
+    const message = error instanceof Error ? error.message : "No se pudo eliminar el presupuesto.";
+    redirect(withMessage("/presupuestos", "error", message));
+  }
+}

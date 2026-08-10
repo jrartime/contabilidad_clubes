@@ -431,6 +431,82 @@ button.icon-button-danger:hover {
   gap: 14px;
 }
 
+.side-drawer-subvenciones {
+  width: min(1180px, 100%);
+}
+
+.subvencion-form-row {
+  display: grid;
+  gap: 12px;
+}
+
+.subvencion-form-row-name {
+  grid-template-columns: minmax(0, 3fr) minmax(120px, 1fr);
+}
+
+.subvencion-form-row-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.subvencion-programas-list {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.subvencion-programa-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) 110px auto auto auto auto auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 1040px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #eee;
+  white-space: nowrap;
+}
+
+.subvencion-programa-selector,
+.subvencion-programa-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.subvencion-programa-selector {
+  gap: 8px;
+  font-size: 13px;
+}
+
+.subvencion-programa-selector span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subvencion-programa-presupuesto {
+  width: 110px;
+}
+
+.subvencion-programa-separator {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.subvencion-programa-estado {
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .subvencion-form-row-name,
+  .subvencion-form-row-three {
+    grid-template-columns: 1fr;
+  }
+}
+
 .danger-zone {
   display: flex;
   justify-content: flex-end;

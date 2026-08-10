@@ -1102,7 +1102,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
           <FileDropUpload
             action={uploadDocumentosAction}
             clubId={clubId}
-            contabilidadId={editRow.id_contabilidad}
+            hiddenFields={{ contabilidad_id: editRow.id_contabilidad }}
             redirectTo={editRedirectHref}
           />
 

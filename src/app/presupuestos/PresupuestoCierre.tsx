@@ -1,5 +1,5 @@
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
-import { closePresupuestoAction } from "./actions";
+import { closePresupuestoAction, deletePresupuestoAction, reopenPresupuestoAction } from "./actions";
 
 export type CierreCheck = {
   label: string;
@@ -18,6 +18,7 @@ export function PresupuestoCierre({
   cerradoAt,
   checks,
   canClose,
+  canEdit,
   returnTo,
 }: {
   presupuestoId: number;
@@ -25,6 +26,8 @@ export function PresupuestoCierre({
   cerradoAt: string | null;
   checks: CierreCheck[];
   canClose: boolean;
+  /** Permiso de edición del club, independiente del estado del presupuesto. */
+  canEdit: boolean;
   returnTo: string;
 }) {
   if (estado === "cerrado") {
@@ -36,8 +39,22 @@ export function PresupuestoCierre({
           <p><strong>Cerrado el:</strong> {cerradoAt ?? "Fecha no disponible"}</p>
         </div>
         <p className="presupuesto-cierre-warning">
-          Este presupuesto está cerrado y no admite modificaciones.
+          Este presupuesto está cerrado y no admite modificaciones directas.
         </p>
+
+        {canEdit ? (
+          <form action={reopenPresupuestoAction}>
+            <input type="hidden" name="presupuesto_id" value={presupuestoId} />
+            <input type="hidden" name="return_to" value={returnTo} />
+            <ConfirmSubmitButton
+              className="presupuesto-reopen-button"
+              ariaLabel="Reabrir presupuesto"
+              message="Al reabrir el presupuesto volverá a borrador: podrás editar sus programas, partidas y cabecera, o eliminarlo. Los datos ya congelados por el cierre se sobrescribirán si vuelve a cerrarse. ¿Deseas continuar?"
+            >
+              Reabrir presupuesto
+            </ConfirmSubmitButton>
+          </form>
+        ) : null}
       </section>
     );
   }
@@ -76,11 +93,24 @@ export function PresupuestoCierre({
             <ConfirmSubmitButton
               className="presupuesto-close-button"
               ariaLabel="Cerrar presupuesto"
-              message="Al cerrar el presupuesto quedará bloqueado y sus conceptos se congelarán históricamente. No podrá editarse después. ¿Deseas continuar?"
+              message="Al cerrar el presupuesto quedará bloqueado y sus conceptos se congelarán históricamente. Podrás reabrirlo más adelante si necesitas modificarlo. ¿Deseas continuar?"
             >
               Cerrar presupuesto
             </ConfirmSubmitButton>
           </fieldset>
+        </form>
+      ) : null}
+
+      {canClose ? (
+        <form action={deletePresupuestoAction}>
+          <input type="hidden" name="presupuesto_id" value={presupuestoId} />
+          <ConfirmSubmitButton
+            className="presupuesto-delete-button"
+            ariaLabel="Eliminar presupuesto"
+            message="¿Eliminar definitivamente este presupuesto, con todos sus programas y partidas? Esta acción no se puede deshacer."
+          >
+            Eliminar presupuesto
+          </ConfirmSubmitButton>
         </form>
       ) : null}
     </section>

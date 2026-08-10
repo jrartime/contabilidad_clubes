@@ -7,6 +7,7 @@ export function SubsidyExecutionSummary({
   ingresosBanco,
   ejecutado,
   fechaLimite,
+  periodoLabel,
 }: {
   programa: string;
   anio?: number | null;
@@ -14,6 +15,7 @@ export function SubsidyExecutionSummary({
   ingresosBanco: number;
   ejecutado: number;
   fechaLimite?: string | null;
+  periodoLabel?: string | null;
 }) {
   const pendiente = Math.max(0, subvencion - ejecutado);
   const porcentaje = subvencion > 0 ? (ejecutado / subvencion) * 100 : 0;
@@ -55,6 +57,11 @@ export function SubsidyExecutionSummary({
       <div style={{ fontWeight: 700 }}>
         {anio ? `[${anio}] ` : ""}
         {programa}
+        {periodoLabel ? (
+          <span style={{ fontWeight: 400, fontSize: 12, color: "var(--muted)", marginLeft: 8 }}>
+            · {periodoLabel}
+          </span>
+        ) : null}
       </div>
       <div
         className="conta-totals-subv-grid"

@@ -212,10 +212,12 @@ export type Database = {
           created_at: string
           direccion: string | null
           email: string | null
+          fecha_constitucion: string | null
           iban: string | null
           id_club: number
           nif: string | null
           nombre: string
+          numero_registro: string | null
           presidente_dni: string | null
           presidente_nombre: string | null
           representante_dni: string | null
@@ -226,10 +228,12 @@ export type Database = {
           created_at?: string
           direccion?: string | null
           email?: string | null
+          fecha_constitucion?: string | null
           iban?: string | null
           id_club?: number
           nif?: string | null
           nombre: string
+          numero_registro?: string | null
           presidente_dni?: string | null
           presidente_nombre?: string | null
           representante_dni?: string | null
@@ -240,10 +244,12 @@ export type Database = {
           created_at?: string
           direccion?: string | null
           email?: string | null
+          fecha_constitucion?: string | null
           iban?: string | null
           id_club?: number
           nif?: string | null
           nombre?: string
+          numero_registro?: string | null
           presidente_dni?: string | null
           presidente_nombre?: string | null
           representante_dni?: string | null
@@ -560,6 +566,7 @@ export type Database = {
       documentos: {
         Row: {
           bucket: string
+          checklist_id: number | null
           club_id: number
           contabilidad_id: number | null
           content_type: string | null
@@ -577,6 +584,7 @@ export type Database = {
         }
         Insert: {
           bucket: string
+          checklist_id?: number | null
           club_id: number
           contabilidad_id?: number | null
           content_type?: string | null
@@ -594,6 +602,7 @@ export type Database = {
         }
         Update: {
           bucket?: string
+          checklist_id?: number | null
           club_id?: number
           contabilidad_id?: number | null
           content_type?: string | null
@@ -610,6 +619,13 @@ export type Database = {
           tipo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "documentos_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_justificacion"
+            referencedColumns: ["id_check"]
+          },
           {
             foreignKeyName: "documentos_club_id_fkey"
             columns: ["club_id"]
@@ -790,6 +806,53 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "subvenciones"
             referencedColumns: ["id_subvencion"]
+          },
+        ]
+      }
+      junta_directiva: {
+        Row: {
+          activo: boolean
+          cargo: string
+          club_id: number
+          created_at: string
+          fecha_fin: string | null
+          fecha_inicio: string
+          id_cargo: number
+          observaciones: string | null
+          persona_dni: string | null
+          persona_nombre: string
+        }
+        Insert: {
+          activo?: boolean
+          cargo: string
+          club_id: number
+          created_at?: string
+          fecha_fin?: string | null
+          fecha_inicio: string
+          id_cargo?: number
+          observaciones?: string | null
+          persona_dni?: string | null
+          persona_nombre: string
+        }
+        Update: {
+          activo?: boolean
+          cargo?: string
+          club_id?: number
+          created_at?: string
+          fecha_fin?: string | null
+          fecha_inicio?: string
+          id_cargo?: number
+          observaciones?: string | null
+          persona_dni?: string | null
+          persona_nombre?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "junta_directiva_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubes"
+            referencedColumns: ["id_club"]
           },
         ]
       }
@@ -1330,6 +1393,10 @@ export type Database = {
       subvencion_programas: {
         Row: {
           club_id: number
+          estado: string
+          fecha_fin_periodo: string | null
+          fecha_inicio_periodo: string | null
+          fecha_limite_justificacion: string | null
           id_subvencion_programa: number
           presupuesto_previsto: number | null
           programa_id: number
@@ -1337,6 +1404,10 @@ export type Database = {
         }
         Insert: {
           club_id: number
+          estado?: string
+          fecha_fin_periodo?: string | null
+          fecha_inicio_periodo?: string | null
+          fecha_limite_justificacion?: string | null
           id_subvencion_programa?: number
           presupuesto_previsto?: number | null
           programa_id: number
@@ -1344,6 +1415,10 @@ export type Database = {
         }
         Update: {
           club_id?: number
+          estado?: string
+          fecha_fin_periodo?: string | null
+          fecha_inicio_periodo?: string | null
+          fecha_limite_justificacion?: string | null
           id_subvencion_programa?: number
           presupuesto_previsto?: number | null
           programa_id?: number

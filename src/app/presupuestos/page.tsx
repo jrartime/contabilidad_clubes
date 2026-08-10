@@ -568,12 +568,18 @@ export default async function PresupuestosPage({
           <h1>Presupuestos</h1>
           <p>Cabeceras presupuestarias del club activo.</p>
         </div>
-        {canEdit ? (
-          <Link href={newHref} className="app-action-link presupuesto-new-button" aria-label="Nuevo presupuesto">
-            <Icon name="new" />
-            <span>Nuevo presupuesto</span>
+        <div className="page-toolbar-actions">
+          <Link href="/presupuestos/anual" className="app-action-link" aria-label="Presupuesto general anual">
+            <Icon name="enter" />
+            <span>Presupuesto anual</span>
           </Link>
-        ) : null}
+          {canEdit ? (
+            <Link href={newHref} className="app-action-link presupuesto-new-button" aria-label="Nuevo presupuesto">
+              <Icon name="new" />
+              <span>Nuevo presupuesto</span>
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {!canEdit ? <div className="presupuesto-info">Tu rol permite consultar presupuestos, pero no modificarlos.</div> : null}
@@ -674,6 +680,7 @@ export default async function PresupuestosPage({
                 cerradoAt={selected.cerrado_at ? formatUpdatedAt(selected.cerrado_at) : null}
                 checks={cierreChecks}
                 canClose={selectedCanEdit}
+                canEdit={canEdit}
                 returnTo={detailHref}
               />
             ) : null}
@@ -767,6 +774,9 @@ export default async function PresupuestosPage({
         .presupuesto-close-button { width: 100%; min-height: 40px; color: #fff; background: var(--danger); }
         .presupuesto-cierre-fieldset:disabled .presupuesto-close-button { cursor: not-allowed; opacity: .45; }
         .presupuesto-cierre-warning { margin: 0; padding: 11px; border: 1px solid #cfd6df; border-radius: 7px; background: #f4f6f8; font-weight: 700; }
+        .presupuesto-reopen-button { width: 100%; min-height: 40px; color: #fff; background: var(--primary); }
+        .presupuesto-delete-button { width: 100%; min-height: 40px; margin-top: 8px; color: var(--danger); background: #fff; border: 1px solid var(--danger); }
+        .presupuesto-delete-button:hover { color: #fff; background: var(--danger); }
         .presupuesto-ejecucion-section { display: grid; gap: 14px; padding-top: 16px; border-top: 1px solid var(--border); }
         .presupuesto-ejecucion-section h3, .presupuesto-ejecucion-group h4 { margin: 0; }
         .presupuesto-ejecucion-section > div > p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }

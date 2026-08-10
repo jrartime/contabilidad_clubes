@@ -6,10 +6,18 @@ import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { Icon } from "@/components/Icon";
 import { AutoSubmitFilters } from "@/components/AutoSubmitFilters";
+import { FileDropUpload } from "@/components/FileDropUpload";
 import { buildFilterHref } from "@/lib/filters";
 import { matchesGlobalSearch } from "@/lib/search";
 import { normalizeDecimalString } from "@/lib/decimal";
-import { formatDateEs, formatDecimal, toDateInputValue, toDecimalInputValue } from "@/lib/format";
+import { formatBytes, formatDateEs, formatDecimal, toDateInputValue, toDecimalInputValue } from "@/lib/format";
+import {
+  deleteChecklistDocumentoAction,
+  deleteChecklistItemAction,
+  downloadChecklistDocumentoAction,
+  upsertChecklistItemAction,
+  uploadChecklistDocumentoAction,
+} from "./checklistActions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -80,6 +88,12 @@ const ESTADO_COLORS: Record<string, string> = {
   justificada: "#7c3aed",
   cerrada: "#374151",
 };
+
+const ESTADOS_PERIODO: { value: string; label: string }[] = [
+  { value: "pendiente", label: "Pendiente" },
+  { value: "presentado", label: "Presentado" },
+  { value: "justificado", label: "Justificado" },
+];
 
 function toText(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -225,6 +239,12 @@ async function updateSubvencionProgramas(formData: FormData) {
       subvencion_id: subvencionId,
       programa_id: programaId,
       presupuesto_previsto: toNullableNumber(formData.get(`presupuesto_previsto_${programaId}`)),
+      fecha_inicio_periodo: toText(formData.get(`fecha_inicio_periodo_${programaId}`)),
+      fecha_fin_periodo: toText(formData.get(`fecha_fin_periodo_${programaId}`)),
+      fecha_limite_justificacion: toText(formData.get(`fecha_limite_justificacion_${programaId}`)),
+      estado: ESTADOS_PERIODO.some((e) => e.value === formData.get(`estado_periodo_${programaId}`))
+        ? String(formData.get(`estado_periodo_${programaId}`))
+        : "pendiente",
     }));
 
     const { error: insertError } = await supabase.from("subvencion_programas").insert(payload);
@@ -354,15 +374,63 @@ export default async function SubvencionesPage({
     : { data: null };
   const programasClub = (programasData ?? []) as ProgramaOption[];
 
-  const linkedProgramas = new Map<number, number | null>();
+  type LinkedPrograma = {
+    presupuesto_previsto: number | null;
+    fecha_inicio_periodo: string | null;
+    fecha_fin_periodo: string | null;
+    fecha_limite_justificacion: string | null;
+    estado: string;
+  };
+  const linkedProgramas = new Map<number, LinkedPrograma>();
   if (editRow) {
     const { data: links } = await supabase
       .from("subvencion_programas")
-      .select("programa_id, presupuesto_previsto")
+      .select(
+        "programa_id, presupuesto_previsto, fecha_inicio_periodo, fecha_fin_periodo, fecha_limite_justificacion, estado"
+      )
       .eq("club_id", clubId)
       .eq("subvencion_id", editRow.id_subvencion);
-    for (const link of (links ?? []) as { programa_id: number; presupuesto_previsto: number | null }[]) {
-      linkedProgramas.set(link.programa_id, link.presupuesto_previsto);
+    for (const link of (links ?? []) as (LinkedPrograma & { programa_id: number })[]) {
+      linkedProgramas.set(link.programa_id, link);
+    }
+  }
+
+  type ChecklistItem = {
+    id_check: number;
+    item: string;
+    requerido: boolean;
+    entregado: boolean;
+    fecha_entrega: string | null;
+    comentario: string | null;
+  };
+  type ChecklistDocumento = {
+    id_documento: number;
+    checklist_id: number;
+    filename: string | null;
+    size: number | null;
+  };
+
+  let checklistItems: ChecklistItem[] = [];
+  let checklistDocumentos: ChecklistDocumento[] = [];
+  if (editRow) {
+    const { data: checklistData } = await supabase
+      .from("checklist_justificacion")
+      .select("id_check, item, requerido, entregado, fecha_entrega, comentario")
+      .eq("club_id", clubId)
+      .eq("subvencion_id", editRow.id_subvencion)
+      .order("id_check", { ascending: true });
+    checklistItems = (checklistData ?? []) as ChecklistItem[];
+
+    if (checklistItems.length > 0) {
+      const { data: docsData } = await supabase
+        .from("documentos")
+        .select("id_documento:id, checklist_id, filename, size:size_bytes")
+        .eq("club_id", clubId)
+        .in(
+          "checklist_id",
+          checklistItems.map((c) => c.id_check)
+        );
+      checklistDocumentos = (docsData ?? []) as ChecklistDocumento[];
     }
   }
 
@@ -424,7 +492,7 @@ export default async function SubvencionesPage({
       {isDrawerOpen ? (
         <>
           <Link href={listHref} className="drawer-backdrop" aria-label="Cerrar panel" />
-          <div id="form" className="side-drawer">
+          <div id="form" className="side-drawer side-drawer-subvenciones">
             <div className="side-drawer-header">
               <div className="side-drawer-title">
                 <span>Subvenciones</span>
@@ -448,16 +516,18 @@ export default async function SubvencionesPage({
                 <input type="hidden" name="id_subvencion" value={editRow?.id_subvencion ?? ""} />
                 <input type="hidden" name="redirect_to" value={listHref} />
 
-                <label>
-                  Nombre *
-                  <input name="nombre" required defaultValue={editRow?.nombre ?? ""} style={{ width: "100%" }} />
-                </label>
-
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+                <div className="subvencion-form-row subvencion-form-row-name">
+                  <label>
+                    Nombre *
+                    <input name="nombre" required defaultValue={editRow?.nombre ?? ""} style={{ width: "100%" }} />
+                  </label>
                   <label>
                     Año *
                     <input name="anio" type="number" min={2000} max={2200} required defaultValue={editRow?.anio ?? ""} style={{ width: "100%" }} />
                   </label>
+                </div>
+
+                <div className="subvencion-form-row subvencion-form-row-three">
                   <label>
                     Estado
                     <select name="estado" defaultValue={editRow?.estado ?? "borrador"} style={{ width: "100%" }}>
@@ -466,9 +536,6 @@ export default async function SubvencionesPage({
                       ))}
                     </select>
                   </label>
-                </div>
-
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
                   <label>
                     Administración
                     <input name="administracion" defaultValue={editRow?.administracion ?? ""} style={{ width: "100%" }} />
@@ -479,12 +546,11 @@ export default async function SubvencionesPage({
                   </label>
                 </div>
 
-                <label>
-                  Nº de expediente
-                  <input name="ref_expediente" defaultValue={editRow?.ref_expediente ?? ""} style={{ width: "100%" }} />
-                </label>
-
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+                <div className="subvencion-form-row subvencion-form-row-three">
+                  <label>
+                    Nº de expediente
+                    <input name="ref_expediente" defaultValue={editRow?.ref_expediente ?? ""} style={{ width: "100%" }} />
+                  </label>
                   <label>
                     Importe solicitado
                     <input
@@ -507,7 +573,7 @@ export default async function SubvencionesPage({
                   </label>
                 </div>
 
-                <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+                <div className="subvencion-form-row subvencion-form-row-three">
                   <label>
                     Inicio del gasto subvencionable
                     <input name="fecha_inicio_gasto" type="date" defaultValue={toDateInputValue(editRow?.fecha_inicio_gasto)} style={{ width: "100%" }} />
@@ -516,12 +582,11 @@ export default async function SubvencionesPage({
                     Fin del gasto subvencionable
                     <input name="fecha_fin_gasto" type="date" defaultValue={toDateInputValue(editRow?.fecha_fin_gasto)} style={{ width: "100%" }} />
                   </label>
+                  <label>
+                    Fecha límite de justificación
+                    <input name="fecha_limite_justificacion" type="date" defaultValue={toDateInputValue(editRow?.fecha_limite_justificacion)} style={{ width: "100%" }} />
+                  </label>
                 </div>
-
-                <label>
-                  Fecha límite de justificación
-                  <input name="fecha_limite_justificacion" type="date" defaultValue={toDateInputValue(editRow?.fecha_limite_justificacion)} style={{ width: "100%" }} />
-                </label>
               </form>
             )}
 
@@ -549,26 +614,60 @@ export default async function SubvencionesPage({
                   {programasClub.length === 0 ? (
                     <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>Este club no tiene programas creados todavía.</p>
                   ) : (
-                    <div style={{ display: "grid", gap: 6, maxHeight: 260, overflowY: "auto", paddingRight: 4 }}>
+                    <div className="subvencion-programas-list">
                       {programasClub.map((p) => {
-                        const linked = linkedProgramas.has(p.id_programa);
+                        const link = linkedProgramas.get(p.id_programa);
+                        const linked = link !== undefined;
                         return (
-                          <label key={p.id_programa} style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 400 }}>
-                            <input type="checkbox" name="programa_id" value={p.id_programa} defaultChecked={linked} />
-                            <span style={{ flex: 1, fontSize: 13, opacity: p.activo ? 1 : 0.6 }}>
-                              {p.anio ? `[${p.anio}] ` : ""}
-                              {p.programa}
-                              {!p.activo ? " (baja)" : ""}
-                            </span>
+                          <div key={p.id_programa} className="subvencion-programa-row">
+                            <label className="subvencion-programa-selector">
+                              <input type="checkbox" name="programa_id" value={p.id_programa} defaultChecked={linked} />
+                              <span style={{ opacity: p.activo ? 1 : 0.6 }}>
+                                {p.anio ? `[${p.anio}] ` : ""}
+                                {p.programa}
+                                {!p.activo ? " (baja)" : ""}
+                              </span>
+                            </label>
                             <input
                               name={`presupuesto_previsto_${p.id_programa}`}
                               type="text"
                               inputMode="decimal"
                               placeholder="Previsto"
-                              defaultValue={toDecimalInputValue(linkedProgramas.get(p.id_programa) ?? "")}
-                              style={{ width: 110 }}
+                              defaultValue={toDecimalInputValue(link?.presupuesto_previsto ?? "")}
+                              className="subvencion-programa-presupuesto"
                             />
-                          </label>
+                            <label className="subvencion-programa-field">
+                              Periodo
+                              <input
+                                type="date"
+                                name={`fecha_inicio_periodo_${p.id_programa}`}
+                                defaultValue={toDateInputValue(link?.fecha_inicio_periodo)}
+                              />
+                            </label>
+                            <span className="subvencion-programa-separator">a</span>
+                            <input
+                              type="date"
+                              name={`fecha_fin_periodo_${p.id_programa}`}
+                              defaultValue={toDateInputValue(link?.fecha_fin_periodo)}
+                            />
+                            <label className="subvencion-programa-field">
+                              Límite justif.
+                              <input
+                                type="date"
+                                name={`fecha_limite_justificacion_${p.id_programa}`}
+                                defaultValue={toDateInputValue(link?.fecha_limite_justificacion)}
+                              />
+                            </label>
+                            <select
+                              name={`estado_periodo_${p.id_programa}`}
+                              defaultValue={link?.estado ?? "pendiente"}
+                              className="subvencion-programa-estado"
+                            >
+                              {ESTADOS_PERIODO.map((e) => (
+                                <option key={e.value} value={e.value}>{e.label}</option>
+                              ))}
+                            </select>
+                          </div>
                         );
                       })}
                     </div>
@@ -579,6 +678,130 @@ export default async function SubvencionesPage({
                     style={{ marginTop: 10, padding: "6px 14px", height: 32, borderRadius: 6, border: "1px solid #cfd7e6", background: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
                   >
                     Guardar programas vinculados
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {canUserEdit && editRow && (
+              <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>Checklist de justificación</div>
+                <p style={{ margin: "0 0 8px", fontSize: 12, opacity: 0.7 }}>
+                  Documentos y trámites exigidos por la convocatoria para presentar o justificar esta subvención.
+                </p>
+
+                {checklistItems.length > 0 && (
+                  <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+                    {checklistItems.map((c) => {
+                      const docs = checklistDocumentos.filter((d) => d.checklist_id === c.id_check);
+                      const itemRedirectTo = `/configuracion/subvenciones?edit=${editRow.id_subvencion}#form`;
+                      return (
+                        <div key={c.id_check} style={{ border: "1px solid #eee", borderRadius: 8, padding: 10, display: "grid", gap: 8 }}>
+                          <form
+                            action={upsertChecklistItemAction}
+                            style={{ display: "grid", gap: 8 }}
+                          >
+                            <input type="hidden" name="id_check" value={c.id_check} />
+                            <input type="hidden" name="subvencion_id" value={editRow.id_subvencion} />
+                            <input type="hidden" name="redirect_to" value={itemRedirectTo} />
+
+                            <input
+                              name="item"
+                              defaultValue={c.item}
+                              style={{ fontSize: 13 }}
+                              placeholder="Ej: Anexo III - Memoria justificativa"
+                            />
+
+                            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 400 }}>
+                                <input type="checkbox" name="requerido" defaultChecked={c.requerido} />
+                                Requerido
+                              </label>
+                              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 400 }}>
+                                <input type="checkbox" name="entregado" defaultChecked={c.entregado} />
+                                Entregado
+                              </label>
+                              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                                Fecha de entrega
+                                <input type="date" name="fecha_entrega" defaultValue={toDateInputValue(c.fecha_entrega)} />
+                              </label>
+                            </div>
+
+                            <input
+                              name="comentario"
+                              defaultValue={c.comentario ?? ""}
+                              placeholder="Comentario"
+                              style={{ fontSize: 12 }}
+                            />
+
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button type="submit" style={{ padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+                                Guardar
+                              </button>
+                              <ConfirmSubmitButton
+                                formAction={deleteChecklistItemAction}
+                                formNoValidate
+                                message="¿Eliminar este elemento del checklist y todos sus documentos adjuntos?"
+                                style={{ padding: "4px 10px", fontSize: 12, cursor: "pointer" }}
+                              >
+                                Eliminar elemento
+                              </ConfirmSubmitButton>
+                            </div>
+                          </form>
+
+                          <div style={{ display: "grid", gap: 6 }}>
+                            {docs.map((doc) => (
+                              <div key={doc.id_documento} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 12 }}>
+                                  {doc.filename} ({formatBytes(doc.size)})
+                                </span>
+                                <form action={downloadChecklistDocumentoAction}>
+                                  <input type="hidden" name="documento_id" value={doc.id_documento} />
+                                  <input type="hidden" name="redirect_to" value={itemRedirectTo} />
+                                  <button type="submit" style={{ padding: "3px 8px", fontSize: 12, cursor: "pointer" }}>
+                                    Descargar
+                                  </button>
+                                </form>
+                                <form action={deleteChecklistDocumentoAction}>
+                                  <input type="hidden" name="documento_id" value={doc.id_documento} />
+                                  <input type="hidden" name="redirect_to" value={itemRedirectTo} />
+                                  <ConfirmSubmitButton
+                                    message="¿Eliminar este archivo?"
+                                    style={{ padding: "3px 8px", fontSize: 12, cursor: "pointer" }}
+                                  >
+                                    Eliminar archivo
+                                  </ConfirmSubmitButton>
+                                </form>
+                              </div>
+                            ))}
+                          </div>
+
+                          <FileDropUpload
+                            action={uploadChecklistDocumentoAction}
+                            clubId={clubId}
+                            hiddenFields={{ checklist_id: c.id_check }}
+                            redirectTo={itemRedirectTo}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <form
+                  action={upsertChecklistItemAction}
+                  style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
+                >
+                  <input type="hidden" name="subvencion_id" value={editRow.id_subvencion} />
+                  <input type="hidden" name="requerido" value="on" />
+                  <input
+                    type="hidden"
+                    name="redirect_to"
+                    value={`/configuracion/subvenciones?edit=${editRow.id_subvencion}#form`}
+                  />
+                  <input name="item" placeholder="Nuevo elemento del checklist" style={{ flex: 1, minWidth: 200, fontSize: 13 }} />
+                  <button type="submit" style={{ padding: "6px 14px", height: 32, borderRadius: 6, border: "1px solid #cfd7e6", background: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    Añadir al checklist
                   </button>
                 </form>
               </div>
