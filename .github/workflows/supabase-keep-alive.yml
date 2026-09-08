@@ -1,0 +1,38 @@
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # GitHub Actions usa UTC. Ejecuta una consulta cada 12 horas.
+    - cron: "17 6,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Consultar Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Faltan los secretos SUPABASE_URL o SUPABASE_ANON_KEY." >&2
+            exit 1
+          fi
+
+          curl --silent --show-error --fail-with-body \
+            --retry 3 --retry-all-errors \
+            --output /dev/null \
+            --header "apikey: $SUPABASE_ANON_KEY" \
+            --header "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "${SUPABASE_URL%/}/rest/v1/clubes?select=id_club&limit=1"
+
+          echo "Consulta a Supabase completada correctamente."

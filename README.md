@@ -81,6 +81,26 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 No debe subirse `.env.local` al repositorio.
 
+## Mantener activo Supabase
+
+El workflow `.github/workflows/supabase-keep-alive.yml` realiza una consulta de
+solo lectura a Supabase cada 12 horas y también se puede ejecutar manualmente.
+
+Para activarlo, crea estos secretos en GitHub desde **Settings > Secrets and
+variables > Actions > New repository secret**:
+
+- `SUPABASE_URL`: el mismo valor que `NEXT_PUBLIC_SUPABASE_URL`.
+- `SUPABASE_ANON_KEY`: el mismo valor que `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
+No uses `SUPABASE_SERVICE_ROLE_KEY`: el workflow solo necesita la clave pública
+`anon`. Después, abre **Actions > Supabase keep-alive > Run workflow** para
+probarlo. La ejecución debe terminar en verde.
+
+> Aviso: GitHub desactiva los workflows programados de repositorios públicos
+> tras 60 días sin actividad en el repositorio. Si ocurre, vuelve a habilitarlo
+> desde **Actions**; este límite no se aplica del mismo modo a repositorios
+> privados.
+
 ## Verificación
 
 ```bash
