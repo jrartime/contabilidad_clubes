@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getActiveClubId } from "@/lib/club";
 import { canEditClubData, getMyClubRole } from "@/lib/clubRole";
 import ContabilidadTable from "./ContabilidadTable";
+import { Apartado6Preview } from "./Apartado6Preview";
 import { ProgramaConceptoFields } from "./ProgramaConceptoFields";
 import { conceptoPermitido, isTipoPrograma } from "@/lib/conceptRules";
 import { matchesGlobalSearch } from "@/lib/search";
@@ -69,6 +70,7 @@ async function upsertAsiento(formData: FormData) {
   const proveedor_id = toNullableBigint(formData.get("proveedor_id"));
   const concepto_id = toNullableBigint(formData.get("concepto_id"));
   const entidad_id = toNullableBigint(formData.get("entidad_id"));
+  const entidad_financiadora_id = toNullableBigint(formData.get("entidad_financiadora_id"));
   const programa_id = toNullableBigint(formData.get("programa_id"));
   const categoria_id = toNullableBigint(formData.get("categoria_id"));
 
@@ -122,6 +124,7 @@ async function upsertAsiento(formData: FormData) {
     proveedor_id,
     concepto_id,
     entidad_id,
+    entidad_financiadora_id,
     programa_id,
     categoria_id,
     numero_factura,
@@ -211,6 +214,7 @@ async function duplicateAsiento(formData: FormData) {
         "personal_id",
         "concepto_id",
         "entidad_id",
+        "entidad_financiadora_id",
         "programa_id",
         "categoria_id",
         "numero_factura",
@@ -348,9 +352,6 @@ export default async function ContabilidadPage({
   const exportHref = exportParams.toString()
     ? `/contabilidad/export?${exportParams.toString()}`
     : `/contabilidad/export`;
-  const justificantesHref = exportParams.toString()
-    ? `/contabilidad/relacion-justificantes/export?${exportParams.toString()}`
-    : `/contabilidad/relacion-justificantes/export`;
 
 
   // Programas primero (solo activos) para poder filtrar la query principal
@@ -436,6 +437,7 @@ export default async function ContabilidadPage({
         "personal_id",
         "concepto_id",
         "entidad_id",
+        "entidad_financiadora_id",
         "programa_id",
         "categoria_id",
         "numero_factura",
@@ -705,6 +707,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
           "personal_id",
           "concepto_id",
           "entidad_id",
+          "entidad_financiadora_id",
           "programa_id",
           "categoria_id",
           "numero_factura",
@@ -792,7 +795,7 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
         ) : null}
         <div className="page-toolbar-actions">
           <a href={exportHref} className="app-action-link">Exportar Excel</a>
-          <a href={justificantesHref} className="app-action-link">Relacion de justificantes</a>
+          <Apartado6Preview exportParamsStr={exportParams.toString()} />
         </div>
 </div>
 {errorMsg && (
@@ -1030,6 +1033,23 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
                   style={{ ...compactFieldStyle, width: "100%" }}
                 />
               </label>
+
+              {/* Entidad financiadora (Justificación B: parte no cubierta por la subvención) */}
+              <label style={labelStyle}>
+                Entidad financiadora (parte no subvencionada)
+                <select
+                  name="entidad_financiadora_id"
+                  defaultValue={toSelectValue(editRow?.entidad_financiadora_id)}
+                  style={compactSelectStyle}
+                >
+                  <option value="">(sin especificar)</option>
+                  {(entidades ?? []).map((e: any) => (
+                    <option key={e.id_entidad} value={e.id_entidad}>
+                      {e.entidad}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
 
@@ -1224,95 +1244,6 @@ const totalIngresosBanco = (bancosIngresosData ?? []).reduce(
           </select>
         </label>
       </AutoSubmitFilters>
-
-      <div className="conta-filter" style={{ display: "none" }}>
-        <form
-          method="get"
-          action="/contabilidad"
-          className="conta-filter-form"
-          style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}
-        >
-          {/* mantenemos edit si existiera, aunque normalmente no filtras mientras editas */}
-          {editId ? <input type="hidden" name="edit" value={String(editId)} /> : null}
-  
-
-          <label className="conta-filter-label">
-            Filtrar por programa
-            <select
-              name="programa_id"
-              defaultValue={
-                isProgramaNoneFilter
-                  ? "none"
-                  : hasProgramaFilter
-                  ? String(programaFilterId)
-                  : ""
-              }
-              className="conta-filter-select"
-              style={{ display: "block", padding: 8, minWidth: 260 }}
-            >
-              <option value="">(todos)</option>
-              <option value="none">(sin programa)</option>
-              {(programas ?? []).map((p: any) => (
-                <option key={p.id_programa} value={p.id_programa}>
-                  {p.anio ? `[${p.anio}] ` : ""}{p.programa}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="conta-filter-label">
-            Filtrar por proveedor
-            <select
-              name="proveedor_id"
-              defaultValue={hasProveedorFilter ? String(proveedorFilterId) : ""}
-              className="conta-filter-select"
-              style={{ display: "block", padding: 8, minWidth: 260 }}
-            >
-              <option value="">(todos)</option>
-              {(proveedores ?? []).map((p: any) => (
-                <option key={p.id_proveedor} value={p.id_proveedor}>
-                  {p.proveedor}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" style={{ padding: "10px 12px", cursor: "pointer" }}>
-            Aplicar filtro
-          </button>
-
-          <Link href="/contabilidad" style={{ padding: "10px 12px", opacity: 0.8 }}>
-            Quitar filtro
-          </Link>
-          
-          <a
-            href={exportHref}
-            style={{
-              padding: "10px 12px",
-              border: "1px solid #ddd",
-              borderRadius: 8,
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            Exportar Excel
-          </a>
-
-          <a
-            href={justificantesHref}
-            style={{
-              padding: "10px 12px",
-              border: "1px solid #ddd",
-              borderRadius: 8,
-              textDecoration: "none",
-              display: "inline-block",
-            }}
-          >
-            Relación de justificantes
-          </a>
-
-        </form>
-      </div>
-
 
 
 

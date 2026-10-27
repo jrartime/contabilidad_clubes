@@ -46,6 +46,7 @@ export async function updateContabilidadAction(payload: {
   personal_id?: number | null;
   categoria_id?: number | null;
   concepto_id?: number | null;
+  entidad_financiadora_id?: number | null;
   observaciones?: string | null;
   programa_id?: number | null;
   importe_total?: string | number | null;
@@ -98,6 +99,8 @@ export async function updateContabilidadAction(payload: {
   if ("personal_id" in payload) update.personal_id = payload.personal_id ?? null;
   if ("categoria_id" in payload) update.categoria_id = payload.categoria_id ?? null;
   if ("concepto_id" in payload) update.concepto_id = payload.concepto_id ?? null;
+  if ("entidad_financiadora_id" in payload)
+    update.entidad_financiadora_id = payload.entidad_financiadora_id ?? null;
   if ("observaciones" in payload)
     update.observaciones = (payload.observaciones ?? "").trim() || null;
   if ("programa_id" in payload) update.programa_id = payload.programa_id ?? null;
